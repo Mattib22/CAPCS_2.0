@@ -58,6 +58,27 @@ def scroll_to_top():
     st.empty()
 
 
+def scroll_to_chat_bottom():
+    """Inject JS to scroll the chat to the bottom after new messages are rendered."""
+    st.markdown(
+        """<script>
+        setTimeout(function() {
+            var sel = [
+                'section[data-testid="stMain"]',
+                '[data-testid="stAppViewContainer"]',
+                'section.main',
+                '.main'
+            ];
+            for (var i = 0; i < sel.length; i++) {
+                var el = window.parent.document.querySelector(sel[i]);
+                if (el) { el.scrollTop = el.scrollHeight; break; }
+            }
+        }, 120);
+        </script>""",
+        unsafe_allow_html=True
+    )
+
+
 def split_options(text: str) -> list:
     """
     Split user-typed options by common separators: / , vs, or

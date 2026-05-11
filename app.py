@@ -22,7 +22,7 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
-                         navigate_to, scroll_to_top, split_options)
+                         navigate_to, scroll_to_top, scroll_to_chat_bottom, split_options)
 
 # ── PAGE CONFIG ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="CAPCS — Cognitive Decision Assistant", page_icon="⚡", layout="centered")
@@ -876,6 +876,8 @@ elif st.session_state.phase == "generating":
         unsafe_allow_html=True
     )
 
+    scroll_to_chat_bottom()
+
     def render_overlay(message, step_label=None):
         pass  # no-op — kept so generating logic compiles unchanged
 
@@ -1103,6 +1105,8 @@ elif st.session_state.phase == "challenge":
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(exc["answer"])
 
+        scroll_to_chat_bottom()
+
         # ── Chat input for user response ──────────────────────────────────────
         inline_answer = st.chat_input(
             "Respond, push back, or think out loud...",
@@ -1210,6 +1214,8 @@ elif st.session_state.phase == "challenge":
 
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(followthrough)
+
+        scroll_to_chat_bottom()
 
         followup_answer = st.chat_input(
             "What's coming up for you?",
