@@ -7,18 +7,16 @@ import json
 import re
 
 
-def get_api_key():
+def _get_api_key():
     try:
         return st.secrets["GEMINI_API_KEY"]
     except Exception:
         return os.getenv("GEMINI_API_KEY", "")
 
-API_KEY = get_api_key()
-
 
 def ask_ai(prompt, max_tokens=1200):
     try:
-        genai.configure(api_key=API_KEY)
+        genai.configure(api_key=_get_api_key())
         model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(
             prompt,
