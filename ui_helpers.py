@@ -58,6 +58,33 @@ def scroll_to_top():
     st.empty()
 
 
+def inject_keepalive():
+    """
+    Inject a JS heartbeat that moves a hidden element every 30 s.
+    This prevents the browser from suspending the Streamlit WebSocket
+    connection when the tab is idle, which is the main cause of
+    short-inactivity logouts on Streamlit Cloud.
+    """
+    st.markdown("""
+<script>
+(function() {
+    if (window._capcsKeepalive) return;   // only one instance
+    window._capcsKeepalive = setInterval(function() {
+        // Touch a hidden div — enough to signal activity to the browser
+        var el = window.parent.document.getElementById('capcs-keepalive');
+        if (!el) {
+            el = window.parent.document.createElement('div');
+            el.id = 'capcs-keepalive';
+            el.style.display = 'none';
+            window.parent.document.body.appendChild(el);
+        }
+        el.setAttribute('data-ts', Date.now());
+    }, 30000);
+})();
+</script>
+""", unsafe_allow_html=True)
+
+
 def scroll_to_chat_bottom():
     """Inject JS to scroll the chat to the bottom after new messages are rendered."""
     st.markdown(

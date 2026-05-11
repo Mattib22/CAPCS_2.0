@@ -1,0 +1,12 @@
+[server]
+# Raise the WebSocket message size limit (default 200 MB is fine, but
+# explicit config prevents cloud defaults from being too conservative)
+maxUploadSize = 50
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+# Prevent the runner from stopping due to script exceptions
+fastReruns = true

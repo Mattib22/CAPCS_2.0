@@ -22,13 +22,15 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
-                         navigate_to, scroll_to_top, scroll_to_chat_bottom, split_options)
+                         navigate_to, scroll_to_top, scroll_to_chat_bottom,
+                         inject_keepalive, split_options)
 
 # ── PAGE CONFIG ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="CAPCS — Cognitive Decision Assistant", page_icon="⚡", layout="centered")
 
 # ── STYLES ─────────────────────────────────────────────────────────────────────
 st.markdown(CSS_STYLES, unsafe_allow_html=True)
+inject_keepalive()
 
 # ── STARTING PHASE ─────────────────────────────────────────────────────────────
 def _starting_phase():
@@ -205,12 +207,16 @@ st.divider()
 # On return visits: read UUID from localStorage, restore session.
 
 # ── USER IDENTIFICATION ────────────────────────────────────────────────────────
-# Persistent anonymous user_key stored in browser localStorage.
-# IMPORTANT: We do NOT use window.location.replace to pass the key back —
-# that causes a full page reload which wipes Streamlit session state mid-session.
-# Instead we use a hidden form that posts to Streamlit's query params without reload.
+# Persistent anonymous user_key stored in browser localStorage and passed
+# via ?uk= query param on every load.
+#
+# Recovery flow on session timeout / reconnect:
+#   1. Streamlit reconnects with a fresh empty session state
+#   2. ?uk= may still be in the URL from the previous session → picked up directly
+#   3. If not in URL: JS reads localStorage and does a full redirect to add ?uk=
+#      (window.location.replace is safe here — session state is already gone)
 
-# Read user_key from query params (set on first load by the JS below)
+# Step 1: read ?uk= from current URL
 qp = st.query_params
 stored_uk = qp.get("uk", "")
 if stored_uk and not st.session_state.get("user_key"):
@@ -227,22 +233,19 @@ if stored_uk and not st.session_state.get("user_key"):
         if res.data:
             row = res.data[0]
             st.session_state.display_name = row.get("display_name", "")
-            # User exists in DB — only mark consent given if they completed it
             if row.get("consent_given_at"):
                 st.session_state.consent_given = True
                 starting = _starting_phase()
                 if st.session_state.get("phase") in ("onboarding", "consent"):
                     st.session_state.phase = starting
-            # If no consent_given_at, user registered but didn't finish consent
-            # — let them proceed to consent page
     except Exception:
         pass
 
-# Only inject the localStorage JS if user is not already identified in session state.
-# This avoids the page reload (window.location.replace) when mid-session.
+# Step 2: if ?uk= is not in URL and user is not identified, redirect using localStorage.
+# window.location.replace triggers a full reload which Streamlit reads correctly.
+# This only runs when session state is already blank (timeout/reconnect), so
+# there is no session state to lose.
 if not st.session_state.get("user_key"):
-    # On first load only: read localStorage and append ?uk= to URL once
-    # Uses pushState instead of replace so it doesn't wipe session state
     st.markdown("""
 <script>
 (function() {
@@ -250,11 +253,7 @@ if not st.session_state.get("user_key"):
     if (stored && !new URL(window.location.href).searchParams.get('uk')) {
         const url = new URL(window.location.href);
         url.searchParams.set('uk', stored);
-        // Use pushState — does NOT trigger a page reload, just updates the URL
-        // Streamlit will pick up the new query param on the next rerun
-        window.history.pushState({}, '', url.toString());
-        // Trigger a Streamlit rerun by dispatching a popstate event
-        window.dispatchEvent(new Event('popstate'));
+        window.location.replace(url.toString());
     }
 })();
 </script>
