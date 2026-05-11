@@ -856,8 +856,6 @@ elif st.session_state.phase == "generating":
     is_undecided = cd.get("is_undecided", False)
     round_num = cd.get("rounds", 0) + 1
 
-    round_num = cd.get("rounds", 0) + 1
-
     # ── Render chat history inline so the page feels continuous ──────────────
     for r in cd.get("rounds_log", []):
         capcs_msg = r.get("conversation_message") or r.get("question", "")
@@ -867,11 +865,6 @@ elif st.session_state.phase == "generating":
         if r.get("answer"):
             with st.chat_message("user", avatar="👤"):
                 st.markdown(r["answer"])
-
-    # Show the last user answer that triggered this generating phase
-    if cd.get("last_answer"):
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(cd["last_answer"])
 
     # Thinking indicator — shown while AI generates
     thinking_ph = st.empty()
@@ -931,7 +924,6 @@ elif st.session_state.phase == "generating":
 
         else:
             # Turn PROBE_TURNS+1 onwards: full challenge — bias named, perspective offered
-            render_overlay(step_messages[0], steps[0][1])
             full_response = get_challenge_response(
                 cd["decision"], cd["options"], cd.get("leaning", ""),
                 cd["confidence_before"], enriched_profile_str,
@@ -941,10 +933,8 @@ elif st.session_state.phase == "generating":
                 confidence_dropped=confidence_dropped,
                 sustained_drop=sustained_drop
             )
-            render_overlay(step_messages[2], steps[2][1])
             conversation_message = get_conversation_message(full_response)
             fields = extract_challenge_fields(full_response)
-            render_overlay(step_messages[3], steps[3][1])
 
             if not conversation_message and fields.get("question_text"):
                 conversation_message = fields["question_text"]
