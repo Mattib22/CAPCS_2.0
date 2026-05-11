@@ -169,10 +169,12 @@ PERSPECTIVE: [the counterattacking option — max 8 words]
 QUESTION: [exact question from above — copy it]
 ---END---
 
-CONVERSATION HISTORY:
+FULL CONVERSATION (use ALL of this for bias detection — not just the last message):
 {history}
 
 USER'S LAST ANSWER: {last_answer}
+
+IMPORTANT: Detect the bias from patterns across the FULL CONVERSATION above. Reference specific things the user said in earlier turns, not just their last message. The final question must ask the user to evaluate the new option — not plan within it. Bad: "What skills would you need?" Good: "Does this feel like something that could actually work for you, or does something feel off?"
 
 DECISION: {decision}
 OPTIONS CONSIDERED SO FAR: {options}
@@ -482,14 +484,16 @@ Definitions:
         return default
 
 
-def detect_response_type(user_message: str) -> str:
+def detect_response_type(user_message: str, turn_num: int = 99) -> str:
     """
-    Returns: 'convinced' | 'not_convinced' | 'position'
+    Returns: 'convinced' | 'not_convinced'
 
-    convinced     -> user signals they accept the new option or feel clear
-    not_convinced -> user pushes back, asks a question, or shares new info
-    position      -> user states where they stand (triggers closing)
+    convinced     -> user explicitly signals they accept the new option or feel clear
+    not_convinced -> anything else (default — conviction must be explicit)
     """
+    if turn_num <= 2:
+        return "not_convinced"
+
     msg = user_message.lower().strip()
 
     conviction_signals = [
@@ -522,7 +526,7 @@ def detect_response_type(user_message: str) -> str:
     if word_count < 10 and not any(s in msg for s in conviction_signals):
         return "not_convinced"
 
-    return "position"
+    return "not_convinced"
 
 
 def get_session_recommendation(final_choice, profile, rounds_log, decision, all_options=None):

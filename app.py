@@ -818,7 +818,8 @@ elif st.session_state.phase == "input":
                 "confidence_start": confidence,
                 "timestamp": datetime.now().isoformat(),
                 "rounds": 0,
-                "rounds_log": []
+                "rounds_log": [],
+                "conversation_history": []
             }
             st.session_state.sub_state = "present"
             st.session_state.followup_exchanges = []
@@ -839,7 +840,10 @@ elif st.session_state.phase == "generating":
     user_key_corr = st.session_state.get("user_key", "")
     bias_corrections = load_bias_corrections(user_key_corr) if user_key_corr else {}
     enriched_profile_str = format_profile(profile, observed_profile, bias_corrections)
-    history_text = build_history(cd.get("rounds_log", []))
+    history_text = "\n".join([
+        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in cd.get("conversation_history", [])
+    ])
     if not st.session_state.get("longitudinal_text"):
         past_sessions = load_log()
         past_completed = [h for h in past_sessions if h.get("completed_at")]
@@ -910,6 +914,7 @@ elif st.session_state.phase == "generating":
             cd["perspective_text"] = ""
             cd["question_text"] = opening
             cd["is_probe_turn"] = True
+            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": opening})
             st.session_state.current_decision = cd
 
         elif turn_num <= PROBE_TURNS:
@@ -929,6 +934,7 @@ elif st.session_state.phase == "generating":
             cd["perspective_text"] = ""
             cd["question_text"] = probe
             cd["is_probe_turn"] = True
+            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": probe})
             st.session_state.current_decision = cd
 
         else:
@@ -961,6 +967,7 @@ elif st.session_state.phase == "generating":
                 cd["perspective_text"] = fields["perspective_text"]
                 cd["question_text"] = fields["question_text"]
                 cd["is_probe_turn"] = False
+                cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
                 st.session_state.current_decision = cd
 
                 if fields["perspective_text"] and fields["perspective_text"] not in st.session_state.all_options:
@@ -1007,6 +1014,7 @@ elif st.session_state.phase == "generating":
             cd["perspective_text"] = option_name
             cd["question_text"] = fields["question_text"]
             cd["is_probe_turn"] = False
+            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
             st.session_state.current_decision = cd
 
             if option_name and not _too_similar(option_name.lower(), existing_opts):
@@ -1165,7 +1173,9 @@ elif st.session_state.phase == "challenge":
                 cd["answer_signals"] = signals
 
             if cd.get("is_probe_turn"):
-                # Probe turn (Turn 1): save round and go straight to challenge
+                # Probe turn: carry history forward, then go to next turn
+                conv_hist = cd.get("conversation_history", [])
+                conv_hist.append({"role": "user", "content": inline_answer.strip()})
                 rounds_log = cd.get("rounds_log", [])
                 rounds_log.append({
                     "round": round_num, "round_number": round_num,
@@ -1197,17 +1207,19 @@ elif st.session_state.phase == "challenge":
                     "rounds": round_num,
                     "rounds_log": rounds_log,
                     "last_answer": inline_answer.strip(),
+                    "conversation_history": conv_hist,
                 }
                 st.session_state.sub_state = "present"
                 st.session_state.followup_exchanges = []
                 st.session_state.phase = "generating"
                 st.rerun()
 
-            # Challenge turn — detect response type
-            response_type = detect_response_type(inline_answer)
+            # Challenge turn — detect response type (turn_num is challenge-specific: 1 = first challenge)
+            response_type = detect_response_type(inline_answer, round_num - PROBE_TURNS)
 
             if response_type == "not_convinced":
                 # User is not convinced — save exchange and loop back with refined challenge
+                cd.setdefault("conversation_history", []).append({"role": "user", "content": inline_answer.strip()})
                 rounds_log = cd.get("rounds_log", [])
                 rounds_log.append({
                     "round": round_num, "round_number": round_num,
