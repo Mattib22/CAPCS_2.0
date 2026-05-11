@@ -1,7 +1,7 @@
 # CAPCS — constants and CSS styles (no Streamlit calls, no logic)
 
 MAX_ROUNDS = 5
-PROBE_TURNS = 1   # Turn 1 = opening question only; Turn 2+ = challenge with bias
+PROBE_TURNS = 3   # Turns 1-3 = probing questions only; Turn 4+ = challenge with bias
 PROFILE_VERSION = "4"  # Bumped: added passions question
 
 # Canonical labels — use these everywhere instead of magic strings

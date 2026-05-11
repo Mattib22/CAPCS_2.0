@@ -88,6 +88,7 @@ defaults = {
     "_input_decision": "",
     "_input_leaning": "",
     "_what_shifted": "",
+    "_final_choice": "",
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -109,6 +110,7 @@ with st.sidebar:
         st.session_state.all_options = []
         st.session_state.session_log = []
         st.session_state["_what_shifted"] = ""
+        st.session_state["_final_choice"] = ""
         st.session_state.pop("_report_analysis", None)
         st.session_state.input_session_counter = st.session_state.get("input_session_counter", 0) + 1
         st.rerun()
@@ -749,6 +751,7 @@ elif st.session_state.phase == "input":
                 st.session_state.followup_exchanges = []
                 st.session_state.all_options = []
                 st.session_state["_what_shifted"] = ""
+                st.session_state["_final_choice"] = ""
                 st.session_state.input_session_counter = st.session_state.get("input_session_counter", 0) + 1
                 st.rerun()
         st.divider()
@@ -863,6 +866,9 @@ elif st.session_state.phase == "generating":
         if capcs_msg:
             with st.chat_message("assistant", avatar="🧑‍🏫"):
                 st.markdown(capcs_msg)
+            bias_n = r.get("bias", "").split("—")[0].strip()[:60]
+            if bias_n and r.get("explanation"):
+                box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
         if r.get("answer"):
             with st.chat_message("user", avatar="👤"):
                 st.markdown(r["answer"])
@@ -1086,12 +1092,10 @@ elif st.session_state.phase == "challenge":
             if capcs_msg:
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(capcs_msg)
-                # "What I noticed" expander after CAPCS messages that have bias
+                # Bias insight box for past challenge rounds
                 bias_n = r.get("bias","").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    with st.expander("💡 What I noticed in your thinking", expanded=False):
-                        st.markdown(f"**{bias_n}**")
-                        st.markdown(r.get("explanation",""))
+                    box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
             # User's answer
             if r.get("answer"):
                 with st.chat_message("user", avatar="👤"):
@@ -1102,39 +1106,39 @@ elif st.session_state.phase == "challenge":
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(conversation_msg)
 
-        # "What I noticed" — collapsed, Turn 2+ only
+        # Bias insight box — always visible on challenge turns (not probe turns)
         bias_name_short = cd.get("bias_text", "").split("—")[0].strip()[:60]
-        if bias_name_short and cd.get("explanation_text"):
-            with st.expander("💡 What I noticed in your thinking", expanded=False):
-                st.markdown(f"**{bias_name_short}**")
-                st.markdown(cd.get("explanation_text", ""))
-                st.divider()
-                st.caption("Does this resonate?")
-                uk = st.session_state.get("user_key", "")
-                existing_corrections = load_bias_corrections(uk) if uk else {}
-                existing_corr = existing_corrections.get(bias_name_short, {})
-                if existing_corr:
-                    verdict_label = {
-                        "accurate": "✅ You confirmed this",
-                        "inaccurate": "❌ You said this didn't fit",
-                        "partial": "🔶 You said this partially fits"
-                    }.get(existing_corr.get("verdict", ""), "")
-                    st.caption(verdict_label)
-                else:
-                    kb = f"bias_ack_{bias_name_short[:15].replace(' ','_')}_{round_num}"
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True):
-                            save_bias_correction(uk, bias_name_short, "accurate", "")
-                            st.rerun()
-                    with col2:
-                        if st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True):
-                            save_bias_correction(uk, bias_name_short, "partial", "")
-                            st.rerun()
-                    with col3:
-                        if st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True):
-                            save_bias_correction(uk, bias_name_short, "inaccurate", "")
-                            st.rerun()
+        if not cd.get("is_probe_turn") and bias_name_short and cd.get("explanation_text"):
+            box(
+                f"<b>💡 {bias_name_short}</b><br>{cd.get('explanation_text', '')}",
+                style="insight"
+            )
+            uk = st.session_state.get("user_key", "")
+            existing_corrections = load_bias_corrections(uk) if uk else {}
+            existing_corr = existing_corrections.get(bias_name_short, {})
+            if existing_corr:
+                prev = {
+                    "accurate": "✅ confirmed",
+                    "inaccurate": "❌ didn't fit",
+                    "partial": "🔶 partially"
+                }.get(existing_corr.get("verdict", ""), "")
+                st.caption(f"Previously marked: {prev} — update your rating:")
+            else:
+                st.caption("Does this resonate with you?")
+            kb = f"bias_ack_{bias_name_short[:15].replace(' ','_')}_{round_num}"
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True):
+                    save_bias_correction(uk, bias_name_short, "accurate", "")
+                    st.rerun()
+            with col2:
+                if st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True):
+                    save_bias_correction(uk, bias_name_short, "partial", "")
+                    st.rerun()
+            with col3:
+                if st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True):
+                    save_bias_correction(uk, bias_name_short, "inaccurate", "")
+                    st.rerun()
 
         # Previous follow-up exchanges this round
         if st.session_state.followup_exchanges:
@@ -1143,14 +1147,6 @@ elif st.session_state.phase == "challenge":
                     st.markdown(exc["question"])
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(exc["answer"])
-
-        # Change 5 — Options on the table (visible mid-conversation on challenge turns)
-        if not cd.get("is_probe_turn"):
-            all_opts = st.session_state.get("all_options", [])
-            if len(all_opts) > 1:
-                with st.expander("🗂 Options on the table so far", expanded=False):
-                    for opt in all_opts:
-                        st.markdown(f"- {opt}")
 
         scroll_to_chat_bottom()
 
@@ -1253,6 +1249,9 @@ elif st.session_state.phase == "challenge":
             if capcs_msg:
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(capcs_msg)
+                bias_n = r.get("bias", "").split("—")[0].strip()[:60]
+                if bias_n and r.get("explanation"):
+                    box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
             if r.get("answer"):
                 with st.chat_message("user", avatar="👤"):
                     st.markdown(r["answer"])
@@ -1263,7 +1262,7 @@ elif st.session_state.phase == "challenge":
         with st.chat_message("user", avatar="👤"):
             st.markdown(cd.get("user_answer", ""))
 
-        # CAPCS asks what shifted — inside a chat bubble
+        # Step 1 — CAPCS asks what shifted
         bias_short = cd.get("bias_text", "").split("—")[0].strip()
         if bias_short:
             shifted_q = f"What shifted for you? Was it recognising the {bias_short}, the new option, or something else?"
@@ -1277,8 +1276,8 @@ elif st.session_state.phase == "challenge":
 
         CONFIDENCE_THRESHOLD = st.session_state.get("confidence_threshold", 75)
 
-        # Use session state to persist the "what shifted" answer across reruns
         if not st.session_state.get("_what_shifted"):
+            # Gate 1: waiting for "what shifted" answer
             what_shifted_input = st.chat_input(
                 "What shifted your thinking?",
                 key=f"chat_shifted_{round_num}"
@@ -1286,13 +1285,32 @@ elif st.session_state.phase == "challenge":
             if what_shifted_input and what_shifted_input.strip():
                 st.session_state["_what_shifted"] = what_shifted_input.strip()
                 st.rerun()
-        else:
-            # User has answered — show their response
+
+        elif not st.session_state.get("_final_choice"):
+            # Gate 2: user answered what shifted — now pick the option
             with st.chat_message("user", avatar="👤"):
                 st.markdown(st.session_state["_what_shifted"])
 
+            all_opts = st.session_state.get("all_options", [])
             with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("And how clear do you feel now?")
+                st.markdown("Which option feels right for you now?")
+
+            scroll_to_chat_bottom()
+            st.markdown("")
+            for i, opt in enumerate(all_opts):
+                if st.button(opt, key=f"final_opt_{i}", use_container_width=True):
+                    st.session_state["_final_choice"] = opt
+                    st.rerun()
+
+        else:
+            # Gate 3: option selected — ask confidence and complete
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(st.session_state["_what_shifted"])
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(f"Going with: **{st.session_state['_final_choice']}**")
+
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown("And how confident do you feel about this now?")
 
             confidence_after = st.slider(
                 "Confidence now", 0, 100,
@@ -1303,17 +1321,11 @@ elif st.session_state.phase == "challenge":
             badge(confidence_after)
             shift = confidence_after - cd.get("confidence_before", 50)
 
-            # Show all options explored — as a confirmation, not a form
-            all_opts = st.session_state.get("all_options", [])
-            if all_opts:
-                st.markdown("**Here's what you explored:**")
-                for opt in all_opts:
-                    st.markdown(f"- {opt}")
-
             scroll_to_chat_bottom()
 
             if st.button("✓ Complete session", key=f"challenge_continue_btn_{round_num}", type="primary", use_container_width=True):
                 what_shifted = st.session_state.pop("_what_shifted", "")
+                final_choice = st.session_state.pop("_final_choice", "")
                 rounds_log = cd.get("rounds_log", [])
                 rounds_log.append({
                     "round": round_num, "round_number": round_num,
@@ -1332,7 +1344,7 @@ elif st.session_state.phase == "challenge":
                     "shifted": True,
                     "still_undecided": False,
                     "how_shifted": what_shifted,
-                    "leaning": cd.get("leaning", ""),
+                    "leaning": final_choice or cd.get("leaning", ""),
                     "confidence": confidence_after,
                     "shift": shift,
                     "confidence_shift": shift,
@@ -1343,7 +1355,7 @@ elif st.session_state.phase == "challenge":
                     "context": cd.get("context", ""),
                     "options": cd.get("options", ""),
                     "all_options": st.session_state.all_options,
-                    "final_choice": cd.get("leaning", ""),
+                    "final_choice": final_choice or cd.get("leaning", ""),
                     "confidence_start": cd.get("confidence_start", confidence_after),
                     "confidence_final": confidence_after,
                     "confidence_shift": confidence_after - cd.get("confidence_start", confidence_after),

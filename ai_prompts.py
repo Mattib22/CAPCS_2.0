@@ -153,9 +153,12 @@ The message does exactly three things:
 
 1. REFLECT (1 sentence): Use the user's exact words from their last answer. Prove you heard something specific.
 
-2. NAME (1-2 sentences): Introduce the bias naturally, not as a label. Weave it in: "what you're describing is called X — it shows up when..." Make the name feel like a revelation.
+2. NAME (exactly 2 sentences, use this exact structure):
+   Sentence 1: "That feeling of [what they described specifically, using their words], despite [the counter-desire or tension they also mentioned], is a classic case of [Bias Name]."
+   Sentence 2: "You're prioritizing [what the bias causes them to prioritize] over [what they're ignoring or suppressing as a result]."
+   The bias name must feel like a revelation — precise and surprising, not generic.
 
-3. COUNTERATTACK (1-2 sentences): Introduce ONE option that is the direct logical antidote to the bias you just named. The connection must be explicit: "Because [bias] pulls you toward X, the counterforce is Y." This option MUST be grounded in what the user actually said — including any constraints they mentioned (visa type, money, relationship, time, location). Do not generate options from the profile alone. End with one question that challenges them on this new option only — not on their original position.
+3. COUNTERATTACK (2 sentences): Introduce ONE concrete option as the direct antidote to the bias. Ground it in the user's specific constraints (money, location, relationship, visa, time — whatever they mentioned). Structure: "Because [bias] pulls you toward [X], the counterforce is [Option Name] — [one sentence why this is the antidote in their specific context]." End with one question about this new option only, not their original position.
 
 Tone: warm, direct. Like a thoughtful friend who knows cognitive science. Never say "I notice" or "it seems like." Final sentence must end with a question mark.
 
