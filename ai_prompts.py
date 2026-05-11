@@ -149,20 +149,18 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
 {undecided_note}
 {drop_note}
 
-Write ONE conversational message (max 200 words) that flows naturally like this:
+Write a message of EXACTLY 3 sentences. Hard cap: 80 words. No exceptions.
 
-1. REFLECT — one sentence that builds on exactly what they just said. Use their words. Prove you heard them.
+Sentence 1 — NAME THE PATTERN: describe what they said, then name the bias naturally inside the sentence. Format: "What you're describing — [their situation in their words] — that's [bias name]. [One-line why it shows up here]."
+Sentence 2 — NEW OPTION: one concrete option they haven't considered. "Have you considered [X]?" or "What about [X]?"
+Sentence 3 — CHALLENGE QUESTION: one specific question that makes them engage with that new option. End with ?.
 
-2. NAME THE BIAS — weave the bias name in naturally mid-sentence, as a moment of recognition, NOT an announcement. Example: "What you're describing — staying because of what you've already put in, even though it's not feeling right anymore — that's actually a well-known pattern called sunk cost thinking. It shows up when..."
-
-3. NEW OPTION — introduce one concrete option they haven't considered, embedded naturally in the flow.
-
-4. CHALLENGE — end with ONE question that specifically challenges them to engage with this new option.
-
-Tone: warm, direct, like a thoughtful friend who also knows cognitive science.
-Never say "I notice" or "it seems like" — just speak.
-The final sentence must end with a question mark.
-Max 200 words total.
+Rules:
+- 3 sentences only. Never more.
+- No preamble, no reflection paragraph, no "I hear you", no filler.
+- Warm but direct — like a friend who knows cognitive science.
+- If the user is undecided: name what's blocking clarity instead of pushing an option.
+- Hard cap: 80 words total.
 
 ---
 
@@ -382,6 +380,33 @@ DECISION: {decision}
 USER PROFILE:
 {profile_str}"""
     return ask_ai(prompt, 3000)
+
+def is_followup_question(text: str) -> bool:
+    """Return True if the user is asking a follow-up rather than making a statement."""
+    lower = text.lower().strip()
+    if "?" in text:
+        return True
+    followup_phrases = [
+        "what do you mean", "in what way", "how so", "can you explain",
+        "tell me more", "why do you", "what is that", "how does that",
+        "what's that", "give me an example", "like what", "how come",
+        "what does that mean", "i don't understand", "not sure what you mean"
+    ]
+    return any(p in lower for p in followup_phrases)
+
+
+def get_followup_answer(perspective_text, user_question, decision, profile_str, history):
+    """Answer a follow-up question briefly and stay in conversation."""
+    prompt = f"""The user asked a follow-up about something you said. Answer it in 2-3 short sentences max. Be direct and specific to their situation. Do NOT introduce a new challenge, bias, or option — just answer what they asked.
+
+WHAT YOU SAID: {perspective_text}
+THEIR QUESTION: {user_question}
+DECISION: {decision}
+PROFILE: {profile_str}
+HISTORY:
+{history}"""
+    return ask_ai(prompt, 1000)
+
 
 def get_consolidation_question(decision, leaning, rounds_log, profile_str, history) -> str:
     """

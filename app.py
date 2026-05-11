@@ -16,9 +16,9 @@ from database import (get_supabase, make_user_key, load_profile_for_user, load_p
                        save_bias_correction, load_bias_corrections)
 from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_challenge_response,
                          extract_challenge_fields, get_conversation_message, get_bias, get_explanation,
-                         get_perspective, get_question, get_followup_answer, get_consolidation_question,
-                         analyse_answer_quality, get_session_recommendation, get_bias_analysis,
-                         classify_domain, infer_options)
+                         get_perspective, get_question, get_followup_answer, is_followup_question,
+                         get_consolidation_question, analyse_answer_quality,
+                         get_session_recommendation, get_bias_analysis, classify_domain, infer_options)
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
@@ -754,109 +754,73 @@ elif st.session_state.phase == "input":
 
     sc = st.session_state.get("input_session_counter", 0)
 
-    # ── Chatbot-style conversation display ────────────────────────────────────
-    # Show any messages already exchanged in this input phase
-    input_messages = st.session_state.get("input_messages", [])
-    for msg in input_messages:
-        role = msg["role"]
-        content = msg["content"]
-        with st.chat_message(role, avatar="🧑‍🏫" if role == "assistant" else "👤"):
-            st.markdown(content)
+    st.markdown("**What are you deciding?**")
+    st.caption("This stays private — CAPCS uses it to personalise the conversation.")
+    st.markdown("")
 
-    # ── Decision input — chat style ───────────────────────────────────────────
-    input_step = st.session_state.get("input_step", "context")
+    context_val = st.text_area(
+        "Your situation",
+        placeholder="What's your current situation? Any context useful for this decision — where you are in life, relevant constraints, what's at stake...",
+        height=90,
+        key=f"form_context_{sc}"
+    )
+    decision_val = st.text_area(
+        "The decision",
+        placeholder="What decision are you working through? e.g. I'm in Australia and don't know whether to keep travelling or go back to Europe.",
+        height=90,
+        key=f"form_decision_{sc}"
+    )
+    leaning_val = st.text_input(
+        "Current leaning (optional)",
+        placeholder="What are you leaning towards right now? Leave blank if genuinely undecided.",
+        key=f"form_leaning_{sc}"
+    )
+    st.markdown("")
+    st.caption("How clear do you feel going in? (0 = completely lost, 100 = basically decided)")
+    confidence = st.slider("Clarity", 0, 100, 35, 5, label_visibility="collapsed", key=f"form_conf_{sc}")
+    badge(confidence)
+    st.markdown("")
 
-    if input_step == "context":
-        if not input_messages:
-            capcs_opener = "Before we dive in — what's your current situation right now? Any context that might be useful."
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown(capcs_opener)
-        user_input = st.chat_input("Your situation...", key=f"chat_context_{sc}")
-        if user_input and user_input.strip():
-            st.session_state.input_messages = [
-                {"role": "assistant", "content": "Before we dive in — what's your current situation right now? Any context that might be useful."},
-                {"role": "user", "content": user_input.strip()},
-                {"role": "assistant", "content": "What decision are you working through?"}
-            ]
-            st.session_state._input_context = user_input.strip()
-            st.session_state.input_step = "decision"
-            st.rerun()
+    if st.button("→ Let's think this through", key="challenge_thinking_btn", type="primary", use_container_width=True):
+        if not decision_val.strip():
+            st.error("Please describe the decision you're working through.")
+        else:
+            decision_raw = decision_val.strip()
+            context_raw = context_val.strip()
+            leaning_raw = leaning_val.strip()
 
-    elif input_step == "decision":
-        user_input = st.chat_input("Describe your decision...", key=f"chat_decision_{sc}")
-        if user_input and user_input.strip():
-            messages = st.session_state.get("input_messages", [])
-            messages.append({"role": "user", "content": user_input.strip()})
-            messages.append({"role": "assistant", "content": "What option are you leaning towards — and why? (If you're genuinely torn, just say that.)"})
-            st.session_state.input_messages = messages
-            st.session_state._input_decision = user_input.strip()
-            st.session_state.input_step = "leaning"
-            st.rerun()
+            detected = split_options(decision_raw)
+            detected = [o for o in detected if o.strip() and len(o) < 80]
+            options = " / ".join(detected) if detected else leaning_raw
+            is_undecided = (not leaning_raw) or any(w in leaning_raw.lower() for w in
+                ["undecided", "not sure", "don't know", "torn", "unsure", "no idea"])
 
-    elif input_step == "leaning":
-        user_input = st.chat_input(
-            "Your leaning and why...",
-            key=f"chat_leaning_{sc}"
-        )
-        if user_input and user_input.strip():
-            messages = st.session_state.get("input_messages", [])
-            messages.append({"role": "user", "content": user_input.strip()})
-            messages.append({"role": "assistant", "content": "And how clear do you feel going into this? Move the slider below — 0 is completely lost, 100 is basically decided."})
-            st.session_state.input_messages = messages
-            st.session_state._input_leaning = user_input.strip()
-            st.session_state.input_step = "confidence"
-            st.rerun()
-
-    elif input_step == "confidence":
-        confidence = st.slider(
-            "Clarity level",
-            0, 100, 35, 5,
-            label_visibility="collapsed",
-            key=f"confidence_slider_{sc}"
-        )
-        badge(confidence)
-        st.markdown("")
-        if st.button("→ Let's think this through", key="challenge_thinking_btn", type="primary", use_container_width=True):
-            context = st.session_state.get("_input_context", "")
-            if not st.secrets.get("GEMINI_API_KEY") and not os.getenv("GEMINI_API_KEY", ""):
-                st.error("API key not configured.")
-            else:
-                decision_raw = st.session_state.get("_input_decision", "")
-                leaning_raw = st.session_state.get("_input_leaning", "")
-
-                # Extract options from decision text and leaning
-                detected = split_options(decision_raw)
-                detected = [o for o in detected if o.strip() and len(o) < 80]
-                options = " / ".join(detected) if detected else leaning_raw
-                is_undecided = any(w in leaning_raw.lower() for w in
-                    ["undecided", "not sure", "don't know", "torn", "unsure", "no idea"])
-
-                full_decision = f"{decision_raw}\n\n[CONTEXT]: {context.strip()}"
-                past_sessions = load_log()
-                st.session_state.confidence_threshold = compute_confidence_threshold(
-                    profile, past_sessions, starting_confidence=confidence
-                )
-                st.session_state.observed_profile = build_observed_profile(past_sessions)
-                st.session_state.longitudinal_text = None
-                st.session_state.all_options = detected or [leaning_raw]
-                st.session_state.current_decision = {
-                    "decision": full_decision,
-                    "decision_short": decision_raw,
-                    "context": context.strip(),
-                    "options": options,
-                    "leaning": leaning_raw,
-                    "is_undecided": is_undecided,
-                    "confidence_before": confidence,
-                    "confidence_start": confidence,
-                    "timestamp": datetime.now().isoformat(),
-                    "rounds": 0,
-                    "rounds_log": []
-                }
-                st.session_state.sub_state = "present"
-                st.session_state.followup_exchanges = []
-                st.session_state.input_step = "context"
-                st.session_state.input_messages = []
-                st.session_state.phase = "generating"; st.rerun()
+            full_decision = f"{decision_raw}\n\n[CONTEXT]: {context_raw}" if context_raw else decision_raw
+            past_sessions = load_log()
+            st.session_state.confidence_threshold = compute_confidence_threshold(
+                profile, past_sessions, starting_confidence=confidence
+            )
+            st.session_state.observed_profile = build_observed_profile(past_sessions)
+            st.session_state.longitudinal_text = None
+            st.session_state.all_options = detected or ([leaning_raw] if leaning_raw else [])
+            st.session_state.current_decision = {
+                "decision": full_decision,
+                "decision_short": decision_raw,
+                "context": context_raw,
+                "options": options,
+                "leaning": leaning_raw,
+                "is_undecided": is_undecided,
+                "confidence_before": confidence,
+                "confidence_start": confidence,
+                "timestamp": datetime.now().isoformat(),
+                "rounds": 0,
+                "rounds_log": []
+            }
+            st.session_state.sub_state = "present"
+            st.session_state.followup_exchanges = []
+            st.session_state.input_step = "context"
+            st.session_state.input_messages = []
+            st.session_state.phase = "generating"; st.rerun()
 
 # ════════════════════════════════════════════════════════════════════════════════
 # GENERATING PHASE — dedicated loading page while AI generates the next challenge
@@ -892,54 +856,35 @@ elif st.session_state.phase == "generating":
     is_undecided = cd.get("is_undecided", False)
     round_num = cd.get("rounds", 0) + 1
 
-    # ── Full-viewport loading overlay — visible regardless of scroll position ──
-    # Uses fixed positioning so it covers the whole screen no matter where
-    # the user was on the previous page
     round_num = cd.get("rounds", 0) + 1
-    steps = [
-        (0.15, "1/4 — Analysing bias"),
-        (0.40, "2/4 — Explaining what this means for you"),
-        (0.65, "3/4 — Generating a perspective"),
-        (0.85, "4/4 — Crafting your challenge"),
-    ]
-    step_messages = [
-        "Analysing your thinking pattern",
-        "Explaining what this means for you",
-        "Finding a perspective outside your thinking",
-        "Crafting your Socratic challenge",
-    ]
 
-    # Render a fixed overlay that covers the entire screen
-    overlay_ph = st.empty()
-    progress_ph = st.empty()
+    # ── Render chat history inline so the page feels continuous ──────────────
+    for r in cd.get("rounds_log", []):
+        capcs_msg = r.get("conversation_message") or r.get("question", "")
+        if capcs_msg:
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown(capcs_msg)
+        if r.get("answer"):
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(r["answer"])
 
-    def render_overlay(message, step_label):
-        overlay_ph.markdown(
-            f"""
-            <div style="
-                position:fixed;top:0;left:0;width:100vw;height:100vh;
-                background:#FDFBF7;z-index:9999;
-                display:flex;flex-direction:column;
-                align-items:center;justify-content:center;gap:24px;
-            ">
-                <div style="font-size:40px">🧑‍🏫</div>
-                <div style="display:flex;gap:10px;align-items:center">
-                    <div style="width:10px;height:10px;border-radius:50%;background:#9A7B3A;
-                         animation:capcs-pulse 1.4s ease-in-out 0s infinite"></div>
-                    <div style="width:10px;height:10px;border-radius:50%;background:#7B1FA2;
-                         animation:capcs-pulse 1.4s ease-in-out 0.2s infinite"></div>
-                    <div style="width:10px;height:10px;border-radius:50%;background:#2E7D52;
-                         animation:capcs-pulse 1.4s ease-in-out 0.4s infinite"></div>
-                    <div style="width:10px;height:10px;border-radius:50%;background:#4A6FA5;
-                         animation:capcs-pulse 1.4s ease-in-out 0.6s infinite"></div>
-                </div>
-                <p style="font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
-                   color:#9A7B3A;font-weight:600;margin:0">{message}</p>
-                <p style="font-size:12px;color:#aaa;margin:0">{step_label}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    # Show the last user answer that triggered this generating phase
+    if cd.get("last_answer"):
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(cd["last_answer"])
+
+    # Thinking indicator — shown while AI generates
+    thinking_ph = st.empty()
+    thinking_ph.markdown(
+        '<div style="display:flex;gap:8px;padding:12px 0;align-items:center">'
+        '<span style="font-size:22px">🧑‍🏫</span>'
+        '<span style="color:#9A7B3A;font-size:14px;letter-spacing:1px">thinking...</span>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    def render_overlay(message, step_label=None):
+        pass  # no-op — kept so generating logic compiles unchanged
 
     try:
         turn_num = round_num  # turn_num 1 = opening, 2+ = challenge with bias
@@ -1031,9 +976,7 @@ elif st.session_state.phase == "generating":
                 if option_name not in st.session_state.all_options:
                     st.session_state.all_options.append(option_name)
 
-        thinking_ph.empty() if 'thinking_ph' in dir() else None
-        overlay_ph.empty()
-        progress_ph.empty()
+        thinking_ph.empty()
 
         st.session_state.phase = "challenge"
         st.rerun()
@@ -1049,8 +992,6 @@ elif st.session_state.phase == "generating":
 elif st.session_state.phase == "challenge":
     if not st.session_state.get("consent_given"):
         st.session_state.phase = "consent"; st.rerun()
-    # Scroll to top whenever a new round renders
-    scroll_to_top()
     cd = st.session_state.current_decision
     profile = load_profile()
     observed_profile = st.session_state.get("observed_profile", {})
@@ -1179,6 +1120,21 @@ elif st.session_state.phase == "challenge":
         )
 
         if inline_answer and inline_answer.strip():
+            # If it's a follow-up question on a challenge turn, answer it and stay in present
+            if not cd.get("is_probe_turn") and is_followup_question(inline_answer):
+                with st.spinner("..."):
+                    followup_ans = get_followup_answer(
+                        cd.get("perspective_text", cd.get("conversation_message", "")),
+                        inline_answer.strip(),
+                        cd["decision"],
+                        format_profile(load_profile(),
+                                       st.session_state.get("observed_profile", {}),
+                                       load_bias_corrections(st.session_state.get("user_key", ""))),
+                        build_history(cd.get("rounds_log", []))
+                    )
+                st.session_state.followup_exchanges.append({"question": inline_answer.strip(), "answer": followup_ans})
+                st.rerun()
+
             cd["user_answer"] = inline_answer.strip()
             with st.spinner("Reading your answer..."):
                 signals = analyse_answer_quality(inline_answer, cd.get("question_text", ""))
@@ -1256,17 +1212,17 @@ elif st.session_state.phase == "challenge":
         is_still_undecided = cd.get("is_undecided", False)
 
         if is_still_undecided:
-            followthrough = "What specifically is keeping you from deciding? Try to be as concrete as you can."
+            followthrough = "What's landing for you from that? Is there anything in there that shifts how you're seeing the decision?"
         elif previous_leaning:
-            followthrough = f"So now that you've sat with this — where does that leave you? Are you still going with {previous_leaning}, or does something feel different now?"
+            followthrough = "What's landing for you from that? Does any of it shift how you're seeing this?"
         else:
-            followthrough = "So where does that leave you? Where are you leaning now?"
+            followthrough = "What's landing for you from that? Does any of it shift how you're seeing this?"
 
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(followthrough)
 
         followup_answer = st.chat_input(
-            "What's coming up for you...",
+            "What's coming up for you?",
             key=f"chat_shifted_{round_num}"
         )
 
