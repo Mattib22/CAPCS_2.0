@@ -359,28 +359,6 @@ LEANING: {leaning or 'unspecified'}
 PERSPECTIVE JUST OFFERED: {perspective_text}"""
     return ask_ai(prompt, 2000)
 
-def get_followup_answer(perspective_text, user_question, decision, profile_str, history):
-    """Answer a user's follow-up question about a perspective."""
-    prompt = f"""The user has asked a follow-up question about a perspective offered to them. Answer it directly and honestly.
-
-Rules:
-- Max 80 words, complete sentences
-- Stay grounded in their specific situation — do not give generic advice
-- Add genuinely new information or reasoning that wasn't already in the perspective
-- Do NOT introduce new biases, new challenges, or new options — just answer the question
-- Warm, direct tone — second person
-- Final sentence must be complete
-
-CONVERSATION HISTORY:
-{history}
-
-PERSPECTIVE OFFERED: {perspective_text}
-USER'S QUESTION: {user_question}
-DECISION: {decision}
-USER PROFILE:
-{profile_str}"""
-    return ask_ai(prompt, 3000)
-
 def is_followup_question(text: str) -> bool:
     """Return True if the user is asking a follow-up rather than making a statement."""
     lower = text.lower().strip()
@@ -397,7 +375,7 @@ def is_followup_question(text: str) -> bool:
 
 def get_followup_answer(perspective_text, user_question, decision, profile_str, history):
     """Answer a follow-up question briefly and stay in conversation."""
-    prompt = f"""The user asked a follow-up about something you said. Answer it in 2-3 short sentences max. Be direct and specific to their situation. Do NOT introduce a new challenge, bias, or option — just answer what they asked.
+    prompt = f"""The user asked a follow-up about something you said. Answer in 2-3 short sentences. Be direct and specific to their situation. Do NOT introduce a new challenge, bias, or option.
 
 WHAT YOU SAID: {perspective_text}
 THEIR QUESTION: {user_question}

@@ -6,7 +6,7 @@ import datetime as _dt
 from datetime import datetime
 import json
 import os
-from supabase import create_client, Client
+from supabase import create_client
 from config import PROFILE_VERSION
 
 
@@ -21,7 +21,7 @@ def make_user_key(username: str, pin: str) -> str:
 
 
 @st.cache_resource
-def get_supabase() -> Client:
+def get_supabase():
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
