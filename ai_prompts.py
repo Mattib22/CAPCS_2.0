@@ -1,0 +1,561 @@
+# CAPCS — all Gemini AI calls and prompt functions
+
+import streamlit as st
+import os
+import google.generativeai as genai
+import json
+import re
+
+
+def get_api_key():
+    try:
+        return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        return os.getenv("GEMINI_API_KEY", "")
+
+API_KEY = get_api_key()
+
+
+def ask_ai(prompt, max_tokens=1200):
+    try:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(
+            prompt,
+            generation_config={"temperature": 0.8, "max_output_tokens": max_tokens}
+        )
+        # response.text raises ValueError if the response was blocked or empty
+        try:
+            text = response.text.strip()
+        except ValueError:
+            # Safety filter triggered or empty response — return safe fallback
+            return ""
+        text = text.lstrip("*").rstrip("*").strip()
+        for prefix in ["BIAS:","PERSPECTIVE:","EXPLANATION:","QUESTION:",
+                       "Bias:","Perspective:","Explanation:","Question:"]:
+            if text.startswith(prefix):
+                text = text[len(prefix):].strip()
+        return text
+    except Exception:
+        return ""
+
+
+# ── NEW CONVERSATIONAL AI FUNCTIONS ────────────────────────────────────────────
+
+def get_opening_question(decision, options, confidence, profile_str, context, longitudinal=""):
+    """
+    Turn 1 only. Pure listening. One warm observation + one open question.
+    No bias named. No labels. Forms hypothesis internally but says nothing.
+    """
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+    confidence_label = (
+        "completely lost" if confidence < 20 else
+        "quite uncertain" if confidence < 40 else
+        "roughly 50/50" if confidence < 60 else
+        "leaning one way" if confidence < 80 else
+        "fairly settled"
+    )
+    prompt = f"""You are a thinking partner helping someone work through a real decision.
+
+Your job on this first turn is ONLY to listen and ask one question.
+
+Read everything carefully. Form a hypothesis about what might really be going on — but say NOTHING about biases, patterns, or judgements yet.
+
+Write one short paragraph (max 60 words):
+- First: one warm, specific observation about what they described — not a compliment, an observation that shows you heard them. Something they said that is worth noticing.
+- Last: one genuinely open question — not leading, not rhetorical. A question you do not already know the answer to.
+
+Rules:
+- No bias names, no labels, no diagnoses, no "I notice you said"
+- Do not reference their confidence level directly
+- Warm, direct, second person
+- End with exactly one question mark
+
+DECISION: {decision}
+OPTIONS: {options}
+CONFIDENCE: {confidence}% ({confidence_label})
+CONTEXT: {context}
+PROFILE:
+{profile_str}{long_section}"""
+    return ask_ai(prompt, 512)
+
+
+def get_challenge_response(decision, options, leaning, confidence, profile_str,
+                           history, last_answer, context, longitudinal="",
+                           emotion="neutral", turn_num=2,
+                           is_undecided=False, confidence_dropped=False,
+                           sustained_drop=False):
+    """
+    Turn 2+. The spark turn.
+    One conversational message: reflects → names bias naturally → introduces
+    new perspective → ends with challenge question on the NEW perspective.
+    Also returns extractable structured fields in a hidden block for Supabase.
+    """
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+
+    tone_note = {
+        "anxious": "The user sounds anxious — begin with more acknowledgement before introducing any challenge. Be gentle.",
+        "conflicted": "The user sounds conflicted — name the conflict explicitly before anything else.",
+        "determined": "The user sounds determined — be more direct. Challenge with confidence.",
+        "avoidant": "The user seems to be deflecting — bring them back to the core question gently.",
+        "excited": "The user sounds excited — match their energy but introduce a grounding question.",
+    }.get(emotion, "")
+
+    undecided_note = "The user is genuinely undecided — do not push toward any option. Help them discover what they actually want." if is_undecided else ""
+
+    drop_note = "The user's confidence has been dropping. Shift to simplifying — identify what is making this feel more complex than it needs to be." if sustained_drop else (
+        "The user's confidence dropped last turn — this turn should simplify, not add complexity." if confidence_dropped else ""
+    )
+
+    prompt = f"""You are a thinking partner helping someone work through a real decision. You have been listening for {turn_num} turns. Now you have enough to name something.
+
+{tone_note}
+{undecided_note}
+{drop_note}
+
+Write ONE conversational message (max 160 words) that does three things in sequence:
+
+1. REFLECT — one sentence that builds directly on what the person just said. Use their exact words or phrases. Prove you heard them specifically, not generically.
+
+2. NAME — introduce the cognitive bias pattern naturally, mid-flow, as a revelation not a label. Do not announce it. Weave it in: "what you're describing is actually a well-known pattern called [X] — it shows up when..." Make the name feel like a moment of recognition.
+
+3. CHALLENGE — introduce one new concrete perspective or option they have not considered, embedded naturally. Then end with ONE question that challenges them to engage with THIS NEW perspective — not their original position.
+
+Tone: warm, direct, curious. Like a thoughtful friend who also knows cognitive science.
+Never say "I notice" or "it seems like" — just speak.
+Final sentence must end with a question mark.
+
+---
+
+After the message, on a new line, output this structured block EXACTLY (it will be hidden from the user — it is for the system only):
+
+---EXTRACT---
+BIAS: [bias name only — max 6 words]
+EXPLANATION: [plain English: what this bias is and why it appeared here — max 40 words, complete sentence]
+PERSPECTIVE: [the new option or angle introduced — max 8 words]
+QUESTION: [copy the exact question from above]
+---END---
+
+CONVERSATION HISTORY:
+{history}
+
+USER'S LAST ANSWER: {last_answer}
+
+DECISION: {decision}
+OPTIONS: {options}
+LEANING: {leaning or 'genuinely undecided'}
+CONFIDENCE: {confidence}%
+CONTEXT: {context}
+PROFILE:
+{profile_str}{long_section}"""
+    return ask_ai(prompt, 3000)
+
+
+def extract_challenge_fields(full_response: str) -> dict:
+    """
+    Parse the ---EXTRACT--- block from get_challenge_response output.
+    Returns dict with bias, explanation, perspective, question.
+    Falls back to empty strings on parse failure.
+    """
+    default = {"bias_text": "", "explanation_text": "", "perspective_text": "", "question_text": ""}
+    try:
+        if "---EXTRACT---" not in full_response:
+            return default
+        extract_block = full_response.split("---EXTRACT---")[1].split("---END---")[0].strip()
+        result = dict(default)
+        for line in extract_block.split("\n"):
+            line = line.strip()
+            if line.startswith("BIAS:"):
+                result["bias_text"] = line.replace("BIAS:", "").strip()
+            elif line.startswith("EXPLANATION:"):
+                result["explanation_text"] = line.replace("EXPLANATION:", "").strip()
+            elif line.startswith("PERSPECTIVE:"):
+                result["perspective_text"] = line.replace("PERSPECTIVE:", "").strip()
+            elif line.startswith("QUESTION:"):
+                result["question_text"] = line.replace("QUESTION:", "").strip()
+        return result
+    except Exception:
+        return default
+
+
+def get_conversation_message(full_response: str) -> str:
+    """
+    Extract the conversational message from get_challenge_response output.
+    Strips the ---EXTRACT--- block — only returns what the user sees.
+    """
+    if "---EXTRACT---" in full_response:
+        return full_response.split("---EXTRACT---")[0].strip()
+    return full_response.strip()
+
+
+# ── EXISTING AI CALLS (preserved for fallback and report generation) ──────────
+def get_bias(decision, options, leaning, confidence, profile_str, history, last_answer="", longitudinal="", confidence_dropped=False, is_undecided=False):
+    answer_section = f"\nUSER'S MOST RECENT ANSWER (reason from this first):\n{last_answer}" if last_answer else ""
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+
+    undecided_note = "The user is genuinely undecided. Focus on what is BLOCKING a decision rather than which option to pick." if is_undecided else ""
+
+    if confidence_dropped:
+        drop_note = """IMPORTANT: The user's confidence has DROPPED since the last round. This means the challenges may be increasing confusion rather than clarity.
+Shift your approach: identify a bias that is making the decision feel MORE complex than it needs to be (e.g. analysis paralysis, perfectionism, catastrophising).
+The goal this round is to SIMPLIFY, not to introduce more complexity."""
+    else:
+        drop_note = ""
+
+    prompt = f"""You are a cognitive scientist. Identify the SINGLE most relevant cognitive bias active RIGHT NOW in this decision.
+
+{undecided_note}
+{drop_note}
+
+Write ONE complete sentence max 40 words:
+"[Bias name] — because [specific profile evidence + what they just said if available], you may be [how this manifests in this decision]."
+
+Rules:
+- Max 40 words, complete sentence, output only the sentence
+- Cite profile data AND the latest answer if available
+- Do NOT repeat a bias already used in THIS SESSION (see history below)
+- If the same bias has appeared across previous sessions, that is fine — recurring patterns are meaningful and should be detected again if genuinely present
+- Choose the bias that best explains THIS specific moment in the reasoning, not the most dramatic one
+
+CONVERSATION HISTORY (this session — avoid repeating these biases):
+{history}{answer_section}{long_section}
+
+USER PROFILE:
+{profile_str}
+
+DECISION: {decision}
+OPTIONS: {options}
+LEANING: {leaning or 'genuinely undecided'}
+CONFIDENCE: {confidence}%"""
+    return ask_ai(prompt, 2048)
+
+def get_explanation(bias_text, decision, profile_str, history, last_answer="", longitudinal=""):
+    answer_section = f"\nUSER'S MOST RECENT ANSWER: {last_answer}" if last_answer else ""
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+    prompt = f"""Explain this bias in 2-3 short sentences only:
+1. What this bias is doing in this specific decision (one sentence)
+2. Why it was detected for this person — cite ONE thing from their profile or answer (one sentence)
+3. One concrete counter-action (one sentence)
+
+No preamble. No bullets. Plain prose. Final sentence must be complete. Max 60 words total.
+
+BIAS: {bias_text}
+DECISION: {decision}
+USER PROFILE: {profile_str}
+{answer_section}"""
+    return ask_ai(prompt, 1024)
+
+def get_perspective(decision, options, leaning, profile_str, bias_text, history, last_answer="", longitudinal="", is_undecided=False):
+    answer_section = f"\nUSER'S MOST RECENT ANSWER (calibrate to what they said):\n{last_answer}" if last_answer else ""
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+
+    if is_undecided:
+        undecided_note = "The user is genuinely undecided — do NOT push them toward any option. Instead offer a reframe or a concrete experiment that would help them discover what they actually want."
+    else:
+        undecided_note = ""
+
+    prompt = f"""You are a Socratic thinking partner. Offer ONE genuinely useful perspective that challenges the user's current thinking.
+
+{undecided_note}
+
+Your perspective must:
+- Be a CONCRETE, SPECIFIC named option or reframe (3-8 words)
+- Be meaningfully different from the existing options — not a minor variation
+- Represent a genuinely different way of approaching the situation, not just a new label
+- Counter the identified bias directly
+- Be relevant to this specific person's profile and situation
+
+Bad examples (too vague, too obvious, too similar to existing):
+- "Consider all your options carefully"
+- "Beach trip this weekend" (when existing option is "go to beach")
+- "Think about what you really want"
+
+Good examples (specific, different, challenging):
+- "Commit to 30-day trial of one option" (forces experiential learning over analysis)
+- "Consult someone who chose differently" (breaks echo chamber)
+- "Write the decision off for 2 weeks" (tests urgency assumption)
+- "Design the hybrid version of both" (challenges false dichotomy)
+
+Format EXACTLY — two lines only:
+OPTION: [3-8 word specific named perspective]
+WHY: [one sentence connecting this to their bias, their answer, and their specific situation]
+
+CONVERSATION HISTORY:
+{history}{answer_section}{long_section}
+
+USER PROFILE:
+{profile_str}
+
+DECISION: {decision}
+EXISTING OPTIONS (must be genuinely different from these): {options}
+CURRENTLY LEANING: {leaning or 'genuinely undecided'}
+BIAS IDENTIFIED: {bias_text}
+
+Output only the two lines. Nothing else."""
+    return ask_ai(prompt, 2048)
+
+def get_question(decision, leaning, perspective_text, profile_str, history, last_answer="", longitudinal=""):
+    answer_section = f"\nUSER'S MOST RECENT ANSWER (engage directly with this):\n{last_answer}" if last_answer else ""
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+    prompt = f"""You are a Socratic thinking partner. Ask ONE short, plain question that builds on what the user just said.
+
+Critical rules:
+- Max 20 words. Short is better than long.
+- Plain conversational language — no academic or psychological jargon whatsoever
+- Match the register of the decision: if it's a small everyday decision, ask a simple direct question; only go deeper for major life decisions
+- Must engage with something specific from their answer
+- Cannot be answered yes/no
+- Must NOT repeat a question from history
+- Output ONLY the question, nothing else
+
+Examples of good questions (simple, direct):
+- "What would you regret more — trying and failing, or not trying?"
+- "What's actually stopping you from deciding right now?"
+- "If a friend had this choice, what would you tell them?"
+- "What would change if you had to decide today?"
+
+CONVERSATION HISTORY:
+{history}{answer_section}{long_section}
+
+DECISION: {decision}
+LEANING: {leaning or 'unspecified'}
+PERSPECTIVE JUST OFFERED: {perspective_text}"""
+    return ask_ai(prompt, 1024)
+
+def get_followup_answer(perspective_text, user_question, decision, profile_str, history):
+    """Answer a user's follow-up question about a perspective."""
+    prompt = f"""The user has asked a follow-up question about a perspective offered to them. Answer it directly and honestly.
+
+Rules:
+- Max 80 words, complete sentences
+- Stay grounded in their specific situation — do not give generic advice
+- Add genuinely new information or reasoning that wasn't already in the perspective
+- Do NOT introduce new biases, new challenges, or new options — just answer the question
+- Warm, direct tone — second person
+- Final sentence must be complete
+
+CONVERSATION HISTORY:
+{history}
+
+PERSPECTIVE OFFERED: {perspective_text}
+USER'S QUESTION: {user_question}
+DECISION: {decision}
+USER PROFILE:
+{profile_str}"""
+    return ask_ai(prompt, 2048)
+
+def get_consolidation_question(decision, leaning, rounds_log, profile_str, history) -> str:
+    """
+    Called when confidence drops for 2+ consecutive rounds.
+    In PP terms: sustained prediction error divergence means the challenges are
+    increasing uncertainty faster than the user can integrate. We must reduce
+    precision on new challenges and consolidate the existing generative model.
+    In Bayesian terms: identify the sufficient statistic — the single piece of
+    information that would most resolve the posterior.
+    """
+    prompt = f"""The user's confidence has been dropping across multiple rounds — the Socratic challenges are destabilising rather than helping. Shift approach completely.
+
+Do NOT introduce a new challenge or bias. Instead:
+- Acknowledge that it's okay to feel uncertain
+- Ask ONE grounding question that helps them identify what they already know for certain about this decision
+- The question should consolidate, not challenge
+
+Max 35 words, ends with ?, output only the question.
+
+HISTORY:
+{history}
+
+DECISION: {decision}
+CURRENT LEANING: {leaning or 'undecided'}
+USER PROFILE:
+{profile_str}"""
+    return ask_ai(prompt, 200)
+
+def analyse_answer_quality(answer: str, question: str) -> dict:
+    """
+    Analyse the user's free-text answer for psychological signals.
+    Returns a dict with depth, emotion, certainty, key_signal, new_option.
+    """
+    default = {"depth": "surface", "emotion": "neutral", "certainty": "unclear", "key_signal": "", "new_option": ""}
+
+    if not answer or len(answer.strip()) < 10:
+        return default
+
+    prompt = f"""Analyse this decision-making response. Return ONLY a JSON object, nothing else.
+
+Question: {question}
+Answer: {answer}
+
+Return exactly this JSON structure with no extra text, replacing each bracketed value with your assessment:
+{{"depth": "[surface|reflective|avoidant]", "emotion": "[anxious|excited|conflicted|neutral|determined]", "certainty": "[high|medium|low|hedging]", "key_signal": "[3-6 words capturing the key psychological signal]", "new_option": "[new concrete option if clearly mentioned, else empty string]"}}
+
+Definitions:
+- depth: surface=factual or short answer, reflective=shows self-awareness or reasoning, avoidant=deflects or changes subject
+- emotion: the single dominant emotional tone
+- certainty: high=confident statements, medium=mixed, low=genuinely uncertain, hedging=lots of maybe/perhaps/not sure
+- key_signal: the most psychologically revealing phrase or pattern in the answer
+- new_option: only if the user clearly introduces a brand new concrete possibility not previously mentioned"""
+
+    try:
+        import json as _json, re as _re
+        result = ask_ai(prompt, 400)
+        if not result:
+            return default
+
+        # Strategy 1: try parsing the whole response directly
+        try:
+            stripped = result.strip()
+            # Remove markdown code fences if present
+            if stripped.startswith("```"):
+                stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
+            parsed = _json.loads(stripped)
+            if "depth" in parsed:
+                return parsed
+        except Exception:
+            pass
+
+        # Strategy 2: find the outermost { ... } block (handles nested content)
+        # Use a stack-based approach rather than regex to handle nesting
+        start = result.find("{")
+        if start == -1:
+            return default
+        depth = 0
+        end = -1
+        for i, ch in enumerate(result[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end == -1:
+            return default
+
+        try:
+            parsed = _json.loads(result[start:end])
+            if "depth" in parsed:
+                return parsed
+        except Exception:
+            pass
+
+        return default
+    except Exception:
+        return default
+
+def get_session_recommendation(final_choice, profile, rounds_log, decision, all_options=None):
+    """Generate a personalised recommendation based on the full session."""
+    biases = [r.get("bias","") for r in rounds_log if r.get("bias")]
+    shifts = [r for r in rounds_log if r.get("shifted")]
+    perspectives = [r.get("perspective","") for r in rounds_log if r.get("perspective")]
+    all_opts = all_options or []
+
+    shift_summary = ""
+    for r in shifts:
+        rn = r.get("round") or r.get("round_number", "?")
+        shift_summary += f"- Round {rn}: shifted to '{r.get('leaning','')}' because: {r.get('how_shifted','')}\n"
+
+    # Slim profile — only fields relevant to the recommendation
+    fields = {
+        "values": "Values",
+        "passions": "Passions",
+        "current_situation": "Current situation",
+        "current_job": "Job",
+        "main_constraint": "Main constraint",
+        "decision_style": "Decision style",
+        "known_bias": "Known blind spot",
+        "success_criteria": "What makes a decision feel right",
+    }
+    slim_profile = "\n".join(
+        f"- {lbl}: {profile[key]}" for key, lbl in fields.items() if profile and profile.get(key)
+    ) or "No profile available."
+
+    prompt = f"""You are analysing the results of a Socratic decision-making session. Write a genuinely personalised analysis — not generic advice about "trusting your instincts" or "following your values". Every sentence must be grounded in the specific data below.
+
+USER PROFILE:
+{slim_profile}
+
+DECISION: {decision[:500]}
+
+OPTIONS CONSIDERED: {', '.join(all_opts) if all_opts else 'see below'}
+
+FINAL CHOICE: {final_choice}
+
+BIASES IDENTIFIED:
+{chr(10).join(f'- {b[:120]}' for b in biases) if biases else 'None identified'}
+
+PERSPECTIVES OFFERED:
+{chr(10).join(f'- {p[:120]}' for p in perspectives) if perspectives else 'None'}
+
+THINKING SHIFTS:
+{shift_summary if shift_summary else 'No shifts recorded'}
+
+Write a clear, warm analysis covering:
+1. Which option makes most sense for this person and why — cite their specific values, situation, and constraint
+2. How the specific biases identified may have been limiting their thinking
+3. Whether their final choice genuinely aligns with who they are based on their profile
+4. One concrete, specific next step — not vague encouragement
+
+CRITICAL FORMATTING:
+- Max 200 words
+- Second person ("you", "your")
+- Plain prose — no bullets, no headers
+- Every sentence must be complete — especially the last one
+- Do not start with "Based on our session" or "It seems" — start with a direct statement"""
+    return ask_ai(prompt, 4096)
+
+def get_bias_analysis(bias_name, count, profile, all_contexts):
+    """Short bias insight for Reasoning Profile — 2-3 sentences."""
+    fields = {"decision_style": "Decision style", "known_bias": "Known blind spot", "values": "Values"}
+    slim_profile = "\n".join(
+        f"- {lbl}: {profile[key]}" for key, lbl in fields.items() if profile and profile.get(key)
+    ) or "No profile available."
+
+    prompt = f"""In 2-3 short sentences:
+1. Why this person tends toward this bias (cite one thing from their profile)
+2. What it costs them in decisions
+3. One practical counter-action
+
+Bias: {bias_name} (detected {count}x in: {str(all_contexts)[:80]})
+Profile: {slim_profile}
+
+Max 50 words. Plain prose. Final sentence complete."""
+    return ask_ai(prompt, 512)
+
+def get_decision_domain(decision, profile):
+    """Classify the decision into a domain for Phase 3 longitudinal analysis."""
+    prompt = f"""Classify this decision into ONE of these domains:
+career, education, relationships, finance, location, identity, health, lifestyle, other
+
+Decision: {decision}
+
+Output only the single domain word, lowercase, nothing else."""
+    return ask_ai(prompt, 50)
+
+def classify_domain(decision: str) -> str:
+    return get_decision_domain(decision, profile=None)
+
+def infer_options(decision_text: str, context: str = "") -> list:
+    """
+    Auto-infer plausible decision options from a decision description.
+    Returns 2-4 short option labels the user can edit.
+    """
+    if not decision_text.strip():
+        return []
+    context_section = f"\nContext: {context}" if context.strip() else ""
+    prompt = f"""The user is facing this decision: "{decision_text.strip()}"{context_section}
+
+Infer the 2-4 most likely options they are considering. Be concrete and short (3-6 words each).
+If the decision is binary (yes/no), include both sides plus possibly a "postpone" or "explore further" option.
+
+Output ONLY the option names, one per line, no numbering, no explanation. Example:
+Stay in current job
+Take the new offer
+Negotiate counter-offer"""
+    try:
+        result = ask_ai(prompt, 200).strip()
+        opts = [line.strip(" -•*").strip() for line in result.split("\n") if line.strip()]
+        # Filter to reasonable lengths
+        return [o for o in opts if 2 <= len(o.split()) <= 8][:4]
+    except Exception:
+        return []
