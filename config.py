@@ -1,6 +1,7 @@
 # CAPCS — constants and CSS styles (no Streamlit calls, no logic)
 
 MAX_ROUNDS = 5
+PROBE_TURNS = 3   # turns of Socratic listening before bias is named
 PROFILE_VERSION = "4"  # Bumped: added passions question
 
 # Canonical labels — use these everywhere instead of magic strings

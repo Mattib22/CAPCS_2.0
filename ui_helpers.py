@@ -30,7 +30,7 @@ def thinking_animation(message="CAPCS is thinking"):
     """Render a branded animated loading indicator."""
     st.markdown(f"""
     <div class="capcs-thinking">
-        <div class="capcs-icon">🤝</div>
+        <div class="capcs-icon">🧑‍🏫</div>
         <div class="capcs-dots">
             <div class="capcs-dot"></div>
             <div class="capcs-dot"></div>

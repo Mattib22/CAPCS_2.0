@@ -77,7 +77,43 @@ CONFIDENCE: {confidence}% ({confidence_label})
 CONTEXT: {context}
 PROFILE:
 {profile_str}{long_section}"""
-    return ask_ai(prompt, 512)
+    return ask_ai(prompt, 1500)
+
+
+def get_probing_question(decision, options, leaning, confidence, profile_str,
+                          history, last_answer, context, longitudinal="", turn_num=2):
+    """
+    Turns 2 through PROBE_TURNS: pure Socratic probing — understand the user's thinking.
+    No bias named. Forms hypothesis internally but says nothing.
+    """
+    long_section = f"\n{longitudinal}" if longitudinal else ""
+    prompt = f"""You are a thinking partner on turn {turn_num} of a conversation. You have been listening carefully.
+
+Your job this turn: ask ONE focused question that goes deeper into what the person just said.
+
+Rules:
+- Build DIRECTLY on their last answer — use their exact words or phrases to show you heard them
+- One question only, max 35 words, ends with ?
+- Cannot be answered yes/no
+- Do NOT name any bias, pattern, or psychological concept
+- Do NOT offer any new option or perspective yet — that comes later
+- Be specific to what they actually said, not a generic follow-up
+- Warm, direct, curious tone — like a thoughtful friend
+
+CONVERSATION HISTORY:
+{history}
+
+USER'S LAST ANSWER: {last_answer}
+
+DECISION: {decision}
+OPTIONS: {options}
+LEANING: {leaning or 'not specified'}
+CONTEXT: {context}
+PROFILE:
+{profile_str}{long_section}
+
+Output only the question, nothing else."""
+    return ask_ai(prompt, 1500)
 
 
 def get_challenge_response(decision, options, leaning, confidence, profile_str,
@@ -113,17 +149,20 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
 {undecided_note}
 {drop_note}
 
-Write ONE conversational message (max 160 words) that does three things in sequence:
+Write ONE conversational message (max 200 words) that flows naturally like this:
 
-1. REFLECT — one sentence that builds directly on what the person just said. Use their exact words or phrases. Prove you heard them specifically, not generically.
+1. REFLECT — one sentence that builds on exactly what they just said. Use their words. Prove you heard them.
 
-2. NAME — introduce the cognitive bias pattern naturally, mid-flow, as a revelation not a label. Do not announce it. Weave it in: "what you're describing is actually a well-known pattern called [X] — it shows up when..." Make the name feel like a moment of recognition.
+2. NAME THE BIAS — weave the bias name in naturally mid-sentence, as a moment of recognition, NOT an announcement. Example: "What you're describing — staying because of what you've already put in, even though it's not feeling right anymore — that's actually a well-known pattern called sunk cost thinking. It shows up when..."
 
-3. CHALLENGE — introduce one new concrete perspective or option they have not considered, embedded naturally. Then end with ONE question that challenges them to engage with THIS NEW perspective — not their original position.
+3. NEW OPTION — introduce one concrete option they haven't considered, embedded naturally in the flow.
 
-Tone: warm, direct, curious. Like a thoughtful friend who also knows cognitive science.
+4. CHALLENGE — end with ONE question that specifically challenges them to engage with this new option.
+
+Tone: warm, direct, like a thoughtful friend who also knows cognitive science.
 Never say "I notice" or "it seems like" — just speak.
-Final sentence must end with a question mark.
+The final sentence must end with a question mark.
+Max 200 words total.
 
 ---
 
@@ -148,7 +187,7 @@ CONFIDENCE: {confidence}%
 CONTEXT: {context}
 PROFILE:
 {profile_str}{long_section}"""
-    return ask_ai(prompt, 3000)
+    return ask_ai(prompt, 4096)
 
 
 def extract_challenge_fields(full_response: str) -> dict:
@@ -227,7 +266,7 @@ DECISION: {decision}
 OPTIONS: {options}
 LEANING: {leaning or 'genuinely undecided'}
 CONFIDENCE: {confidence}%"""
-    return ask_ai(prompt, 2048)
+    return ask_ai(prompt, 3000)
 
 def get_explanation(bias_text, decision, profile_str, history, last_answer="", longitudinal=""):
     answer_section = f"\nUSER'S MOST RECENT ANSWER: {last_answer}" if last_answer else ""
@@ -243,7 +282,7 @@ BIAS: {bias_text}
 DECISION: {decision}
 USER PROFILE: {profile_str}
 {answer_section}"""
-    return ask_ai(prompt, 1024)
+    return ask_ai(prompt, 2000)
 
 def get_perspective(decision, options, leaning, profile_str, bias_text, history, last_answer="", longitudinal="", is_undecided=False):
     answer_section = f"\nUSER'S MOST RECENT ANSWER (calibrate to what they said):\n{last_answer}" if last_answer else ""
@@ -292,7 +331,7 @@ CURRENTLY LEANING: {leaning or 'genuinely undecided'}
 BIAS IDENTIFIED: {bias_text}
 
 Output only the two lines. Nothing else."""
-    return ask_ai(prompt, 2048)
+    return ask_ai(prompt, 3000)
 
 def get_question(decision, leaning, perspective_text, profile_str, history, last_answer="", longitudinal=""):
     answer_section = f"\nUSER'S MOST RECENT ANSWER (engage directly with this):\n{last_answer}" if last_answer else ""
@@ -320,7 +359,7 @@ CONVERSATION HISTORY:
 DECISION: {decision}
 LEANING: {leaning or 'unspecified'}
 PERSPECTIVE JUST OFFERED: {perspective_text}"""
-    return ask_ai(prompt, 1024)
+    return ask_ai(prompt, 2000)
 
 def get_followup_answer(perspective_text, user_question, decision, profile_str, history):
     """Answer a user's follow-up question about a perspective."""
@@ -342,7 +381,7 @@ USER'S QUESTION: {user_question}
 DECISION: {decision}
 USER PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 2048)
+    return ask_ai(prompt, 3000)
 
 def get_consolidation_question(decision, leaning, rounds_log, profile_str, history) -> str:
     """
@@ -369,7 +408,7 @@ DECISION: {decision}
 CURRENT LEANING: {leaning or 'undecided'}
 USER PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 200)
+    return ask_ai(prompt, 1000)
 
 def analyse_answer_quality(answer: str, question: str) -> dict:
     """
@@ -398,7 +437,7 @@ Definitions:
 
     try:
         import json as _json, re as _re
-        result = ask_ai(prompt, 400)
+        result = ask_ai(prompt, 800)
         if not result:
             return default
 
@@ -520,7 +559,7 @@ Bias: {bias_name} (detected {count}x in: {str(all_contexts)[:80]})
 Profile: {slim_profile}
 
 Max 50 words. Plain prose. Final sentence complete."""
-    return ask_ai(prompt, 512)
+    return ask_ai(prompt, 1500)
 
 def get_decision_domain(decision, profile):
     """Classify the decision into a domain for Phase 3 longitudinal analysis."""
@@ -553,7 +592,7 @@ Stay in current job
 Take the new offer
 Negotiate counter-offer"""
     try:
-        result = ask_ai(prompt, 200).strip()
+        result = ask_ai(prompt, 600).strip()
         opts = [line.strip(" -•*").strip() for line in result.split("\n") if line.strip()]
         # Filter to reasonable lengths
         return [o for o in opts if 2 <= len(o.split()) <= 8][:4]
