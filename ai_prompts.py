@@ -143,34 +143,29 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
         "The user's confidence dropped last turn — this turn should simplify, not add complexity." if confidence_dropped else ""
     )
 
-    prompt = f"""You are a thinking partner helping someone work through a real decision. You have been listening for {turn_num} turns. Now you have enough to name something.
+    prompt = f"""You are a thinking partner helping someone work through a real decision. You have been listening for {turn_num} turns.
 
 {tone_note}
 {undecided_note}
 {drop_note}
 
-Write a message of EXACTLY 3 sentences. Hard cap: 80 words. No exceptions.
+Write ONE conversational message of MAXIMUM 80 WORDS. Count your words before outputting. If over 80, cut ruthlessly. Do not pad. Do not explain yourself.
 
-Sentence 1 — NAME THE PATTERN: describe what they said, then name the bias naturally inside the sentence. Format: "What you're describing — [their situation in their words] — that's [bias name]. [One-line why it shows up here]."
-Sentence 2 — NEW OPTION: one concrete option they haven't considered. "Have you considered [X]?" or "What about [X]?"
-Sentence 3 — CHALLENGE QUESTION: one specific question that makes them engage with that new option. End with ?.
+The message does exactly three things:
 
-Rules:
-- 3 sentences only. Never more.
-- No preamble, no reflection paragraph, no "I hear you", no filler.
-- Warm but direct — like a friend who knows cognitive science.
-- If the user is undecided: name what's blocking clarity instead of pushing an option.
-- Hard cap: 80 words total.
+1. REFLECT (1 sentence): Use the user's exact words from their last answer. Prove you heard something specific.
 
----
+2. NAME (1-2 sentences): Introduce the bias naturally, not as a label. Weave it in: "what you're describing is called X — it shows up when..." Make the name feel like a revelation.
 
-After the message, on a new line, output this structured block EXACTLY (it will be hidden from the user — it is for the system only):
+3. COUNTERATTACK (1-2 sentences): Introduce ONE option that is the direct logical antidote to the bias you just named. The connection must be explicit: "Because [bias] pulls you toward X, the counterforce is Y." This option MUST be grounded in what the user actually said — including any constraints they mentioned (visa type, money, relationship, time, location). Do not generate options from the profile alone. End with one question that challenges them on this new option only — not on their original position.
+
+Tone: warm, direct. Like a thoughtful friend who knows cognitive science. Never say "I notice" or "it seems like." Final sentence must end with a question mark.
 
 ---EXTRACT---
 BIAS: [bias name only — max 6 words]
-EXPLANATION: [plain English: what this bias is and why it appeared here — max 40 words, complete sentence]
-PERSPECTIVE: [the new option or angle introduced — max 8 words]
-QUESTION: [copy the exact question from above]
+EXPLANATION: [what this bias is and why it appeared — max 40 words]
+PERSPECTIVE: [the counterattacking option — max 8 words]
+QUESTION: [exact question from above — copy it]
 ---END---
 
 CONVERSATION HISTORY:
@@ -179,7 +174,7 @@ CONVERSATION HISTORY:
 USER'S LAST ANSWER: {last_answer}
 
 DECISION: {decision}
-OPTIONS: {options}
+OPTIONS CONSIDERED SO FAR: {options}
 LEANING: {leaning or 'genuinely undecided'}
 CONFIDENCE: {confidence}%
 CONTEXT: {context}
@@ -484,6 +479,50 @@ Definitions:
         return default
     except Exception:
         return default
+
+
+def detect_response_type(user_message: str) -> str:
+    """
+    Returns: 'convinced' | 'not_convinced' | 'position'
+
+    convinced     -> user signals they accept the new option or feel clear
+    not_convinced -> user pushes back, asks a question, or shares new info
+    position      -> user states where they stand (triggers closing)
+    """
+    msg = user_message.lower().strip()
+
+    conviction_signals = [
+        "that makes sense", "you're right", "i think you're right",
+        "that's a good point", "i hadn't thought", "that resonates",
+        "maybe i should", "i'm starting to think", "that actually",
+        "i can see", "i agree", "that helps", "i feel clearer",
+        "i'm leaning towards", "i've decided", "i think i should"
+    ]
+
+    resistance_signals = [
+        "but ", "however", "unfortunately", "that won't", "i can't",
+        "it's not that simple", "yes but", "yeah but", "i don't think",
+        "that's not", "the problem is", "the issue is", "what about",
+        "in what way", "how would", "what if"
+    ]
+
+    has_question = "?" in user_message
+    word_count = len(msg.split())
+
+    if any(s in msg for s in conviction_signals):
+        return "convinced"
+
+    if has_question or any(msg.startswith(w) for w in ["how", "why", "what", "but", "yes but", "yeah but"]):
+        return "not_convinced"
+
+    if any(s in msg for s in resistance_signals):
+        return "not_convinced"
+
+    if word_count < 10 and not any(s in msg for s in conviction_signals):
+        return "not_convinced"
+
+    return "position"
+
 
 def get_session_recommendation(final_choice, profile, rounds_log, decision, all_options=None):
     """Generate a personalised recommendation based on the full session."""
