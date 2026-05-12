@@ -1,4 +1,4 @@
-# CAPCS — all Gemini AI calls and prompt functions
+# CAPCS — all Gemini AI calls and prompt functions (v2)
 
 import streamlit as st
 import os
