@@ -172,12 +172,17 @@ PERSPECTIVE: [the counterattacking option — max 8 words]
 QUESTION: [exact question from above — copy it]
 ---END---
 
-FULL CONVERSATION (use ALL of this for bias detection — not just the last message):
+FULL CONVERSATION — read every turn before writing anything:
 {history}
 
-USER'S LAST ANSWER: {last_answer}
-
-IMPORTANT: Detect the bias from patterns across the FULL CONVERSATION above. Reference specific things the user said in earlier turns, not just their last message. The final question must ask the user to evaluate the new option — not plan within it. Bad: "What skills would you need?" Good: "Does this feel like something that could actually work for you, or does something feel off?"
+BIAS DETECTION RULES (follow strictly):
+- Read ALL user answers in the conversation above, not just the last one
+- The bias you name must explain a pattern visible across MULTIPLE answers, not a single response
+- Cross-reference what the user said with their PROFILE below — the bias should be grounded in both their words AND who they are
+- Quote or paraphrase something from an EARLIER turn (not the last message) when naming the bias
+- The final question must ask the user to EVALUATE the new option, not plan within it
+  WRONG: "How could X fit your travel plans?" (assumes acceptance)
+  RIGHT: "Does X feel like something that could actually work for you, or does something about it feel off?"
 
 DECISION: {decision}
 OPTIONS CONSIDERED SO FAR: {options}

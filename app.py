@@ -940,42 +940,69 @@ elif st.session_state.phase == "generating":
         else:
             # Turn PROBE_TURNS+1 onwards: full challenge — bias named, perspective offered
 
-            # ── followup_mode: user pushed back, generate refined challenge ────
+            # ── followup_mode: user pushed back — probe first, then new challenge ─
             is_followup_mode = cd.get("followup_mode", False)
             if is_followup_mode:
-                cd["followup_mode"] = False
-                st.session_state.current_decision = cd
+                pushback_probes = cd.get("pushback_probes_remaining", 0)
 
-                full_response = get_challenge_response(
-                    cd["decision"], cd["options"], cd.get("leaning", ""),
-                    cd["confidence_before"], enriched_profile_str,
-                    history_text, cd.get("last_answer", ""), context, longitudinal_text,
-                    emotion=emotion, turn_num=turn_num,
-                    is_undecided=is_undecided,
-                    confidence_dropped=confidence_dropped,
-                    sustained_drop=sustained_drop
-                )
-                conversation_message = get_conversation_message(full_response)
-                fields = extract_challenge_fields(full_response)
-                if not conversation_message and fields.get("question_text"):
-                    conversation_message = fields["question_text"]
+                if pushback_probes > 0:
+                    # Still in pushback probing phase — ask a follow-up question
+                    probe = get_probing_question(
+                        cd["decision"], cd["options"], cd.get("leaning", ""),
+                        cd["confidence_before"], enriched_profile_str,
+                        history_text, cd.get("last_answer", ""), context, longitudinal_text,
+                        turn_num=turn_num
+                    )
+                    cd["conversation_message"] = probe
+                    cd["bias_text"] = ""
+                    cd["explanation_text"] = ""
+                    cd["perspective_option"] = ""
+                    cd["perspective_why"] = ""
+                    cd["perspective_text"] = ""
+                    cd["question_text"] = probe
+                    cd["is_probe_turn"] = True
+                    cd["pushback_probes_remaining"] = pushback_probes - 1
+                    cd.setdefault("conversation_history", []).append({"role": "assistant", "content": probe})
+                    st.session_state.current_decision = cd
+                    thinking_ph.empty()
+                    st.session_state.phase = "challenge"
+                    st.rerun()
 
-                cd["conversation_message"] = conversation_message
-                cd["bias_text"] = fields["bias_text"]
-                cd["explanation_text"] = fields["explanation_text"]
-                cd["perspective_option"] = fields["perspective_text"]
-                cd["perspective_text"] = fields["perspective_text"]
-                cd["question_text"] = fields["question_text"]
-                cd["is_probe_turn"] = False
-                cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
-                st.session_state.current_decision = cd
+                else:
+                    # Probing done — generate a new challenge with the full context
+                    cd["followup_mode"] = False
+                    st.session_state.current_decision = cd
 
-                if fields["perspective_text"] and fields["perspective_text"] not in st.session_state.all_options:
-                    st.session_state.all_options.append(fields["perspective_text"])
+                    full_response = get_challenge_response(
+                        cd["decision"], cd["options"], cd.get("leaning", ""),
+                        cd["confidence_before"], enriched_profile_str,
+                        history_text, cd.get("last_answer", ""), context, longitudinal_text,
+                        emotion=emotion, turn_num=turn_num,
+                        is_undecided=is_undecided,
+                        confidence_dropped=confidence_dropped,
+                        sustained_drop=sustained_drop
+                    )
+                    conversation_message = get_conversation_message(full_response)
+                    fields = extract_challenge_fields(full_response)
+                    if not conversation_message and fields.get("question_text"):
+                        conversation_message = fields["question_text"]
 
-                thinking_ph.empty()
-                st.session_state.phase = "challenge"
-                st.rerun()
+                    cd["conversation_message"] = conversation_message
+                    cd["bias_text"] = fields["bias_text"]
+                    cd["explanation_text"] = fields["explanation_text"]
+                    cd["perspective_option"] = fields["perspective_text"]
+                    cd["perspective_text"] = fields["perspective_text"]
+                    cd["question_text"] = fields["question_text"]
+                    cd["is_probe_turn"] = False
+                    cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
+                    st.session_state.current_decision = cd
+
+                    if fields["perspective_text"] and fields["perspective_text"] not in st.session_state.all_options:
+                        st.session_state.all_options.append(fields["perspective_text"])
+
+                    thinking_ph.empty()
+                    st.session_state.phase = "challenge"
+                    st.rerun()
 
             # ── Normal challenge generation ────────────────────────────────────
             full_response = get_challenge_response(
@@ -1208,6 +1235,8 @@ elif st.session_state.phase == "challenge":
                     "rounds_log": rounds_log,
                     "last_answer": inline_answer.strip(),
                     "conversation_history": conv_hist,
+                    "followup_mode": cd.get("followup_mode", False),
+                    "pushback_probes_remaining": cd.get("pushback_probes_remaining", 0),
                 }
                 st.session_state.sub_state = "present"
                 st.session_state.followup_exchanges = []
@@ -1218,7 +1247,7 @@ elif st.session_state.phase == "challenge":
             response_type = detect_response_type(inline_answer, round_num - PROBE_TURNS)
 
             if response_type == "not_convinced":
-                # User is not convinced — save exchange and loop back with refined challenge
+                # User is not convinced — probe for PROBE_TURNS more turns before new bias
                 cd.setdefault("conversation_history", []).append({"role": "user", "content": inline_answer.strip()})
                 rounds_log = cd.get("rounds_log", [])
                 rounds_log.append({
@@ -1241,6 +1270,7 @@ elif st.session_state.phase == "challenge":
                     "shift": 0, "confidence_shift": 0,
                 })
                 cd["followup_mode"] = True
+                cd["pushback_probes_remaining"] = PROBE_TURNS
                 cd["rounds"] = round_num
                 cd["rounds_log"] = rounds_log
                 st.session_state.current_decision = cd
