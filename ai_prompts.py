@@ -64,6 +64,9 @@ Write one short paragraph (max 60 words):
 - Last: one genuinely open question — not leading, not rhetorical. A question you do not already know the answer to.
 
 Rules:
+- Act like a psychologist exploring what is happening inside the user's mind. Do not ask about facts, activities, or logistics. Ask about feelings, meanings, values, and tensions.
+- If the user uses a word like "have to", "should", or "can't" — ask about that specific word. It reveals how they are framing the decision internally.
+- Each question should go one level deeper psychologically than the previous answer.
 - No bias names, no labels, no diagnoses, no "I notice you said"
 - Do not reference their confidence level directly
 - Warm, direct, second person
@@ -90,12 +93,13 @@ def get_probing_question(decision, options, leaning, confidence, profile_str,
 Your job this turn: ask ONE focused question that goes deeper into what the person just said.
 
 Rules:
+- Act like a psychologist — ask about feelings, meanings, values, and tensions. Not facts or logistics.
+- If the user used a word like "have to", "should", or "can't" in their last answer, ask about that word specifically.
 - Build DIRECTLY on their last answer — use their exact words or phrases to show you heard them
 - One question only, max 35 words, ends with ?
 - Cannot be answered yes/no
 - Do NOT name any bias, pattern, or psychological concept
 - Do NOT offer any new option or perspective yet — that comes later
-- Be specific to what they actually said, not a generic follow-up
 - Warm, direct, curious tone — like a thoughtful friend
 
 CONVERSATION HISTORY:
@@ -571,7 +575,8 @@ Write 2-3 sentences, MAXIMUM 60 WORDS TOTAL (count strictly):
 2. Name the bias naturally mid-sentence as a revelation, not a label: "that feeling of X is called Y"
 3. Explain in plain English what this bias is doing to their thinking
 
-Do NOT introduce any option. Do NOT ask a question. Do NOT offer advice.{rejected_note}
+Do NOT introduce any option. Do NOT ask a question. Do NOT offer advice.
+Write in second person, speaking directly to the user ("you", "your"). Never refer to the user in the third person ("the user", "they", "their"). Never start a sentence with "The user" or "You said".{rejected_note}
 
 Then output on a new line:
 BIAS_NAME: [bias name only, max 6 words]
@@ -580,20 +585,24 @@ BIAS_EXPLANATION: [one plain English sentence, max 25 words]
 CONTEXT: {context}
 PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 600)
+    return ask_ai(prompt, 1200)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
-    """Parse BIAS_NAME and BIAS_EXPLANATION from get_spark_message output."""
+    """Parse BIAS_NAME and BIAS_EXPLANATION from get_spark_message output.
+    Robust to markdown bold markers, underscores vs spaces, and casing."""
     result = {"spark_message": "", "bias_name": "", "bias_explanation": ""}
     message_lines = []
-    for line in spark_response.strip().split("\n"):
-        if line.startswith("BIAS_NAME:"):
-            result["bias_name"] = line.replace("BIAS_NAME:", "").strip()
-        elif line.startswith("BIAS_EXPLANATION:"):
-            result["bias_explanation"] = line.replace("BIAS_EXPLANATION:", "").strip()
+    for raw_line in spark_response.strip().split("\n"):
+        # Normalize: strip markdown bold/italic markers and leading punctuation
+        line = raw_line.strip().strip("*").strip("_").strip("-").strip()
+        line_upper = line.upper()
+        if line_upper.startswith("BIAS_NAME:") or line_upper.startswith("BIAS NAME:"):
+            result["bias_name"] = line.split(":", 1)[-1].strip().strip("*").strip("_").strip()
+        elif line_upper.startswith("BIAS_EXPLANATION:") or line_upper.startswith("BIAS EXPLANATION:"):
+            result["bias_explanation"] = line.split(":", 1)[-1].strip().strip("*").strip("_").strip()
         else:
-            message_lines.append(line)
+            message_lines.append(raw_line)
     result["spark_message"] = "\n".join(l for l in message_lines if l.strip()).strip()
     return result
 
