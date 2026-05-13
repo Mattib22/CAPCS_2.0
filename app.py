@@ -1244,35 +1244,24 @@ elif st.session_state.phase == "challenge":
         if not conversation_msg:
             st.session_state.phase = "generating"; st.rerun()
 
-        _CONVICTION = [
-            "yes", "yes this could work", "yes, this could work",
-            "that could work", "this could work", "sounds good",
-            "that makes sense", "i think so", "definitely", "absolutely",
-            "i like this", "that works", "this works", "great idea", "good idea",
-            "i agree", "that resonates", "i'm convinced", "that's it",
-        ]
-
+        with st.chat_message("assistant", avatar="🧑‍🏫"):
+            st.markdown("Could this work for you?")
+        scroll_to_chat_bottom()
         st.markdown("")
         col1, col2 = st.columns(2)
         with col1:
-            ca_yes = st.button("Yes, this could work", key=f"ca_yes_{round_num}",
+            ca_yes = st.button("Yes", key=f"ca_yes_{round_num}",
                                type="primary", use_container_width=True)
         with col2:
-            ca_no = st.button("No, this doesn't work for me", key=f"ca_no_{round_num}",
+            ca_no = st.button("No", key=f"ca_no_{round_num}",
                               use_container_width=True)
-        ca_typed = st.chat_input("Or respond in your own words…", key=f"ca_text_{round_num}")
 
-        # Detect conviction from button OR typed phrase
-        typed_convinced = ca_typed and any(p in ca_typed.lower() for p in _CONVICTION)
-        is_convinced = ca_yes or typed_convinced
-        is_rejected  = ca_no  or (ca_typed and not typed_convinced)
-
-        def _go_conviction(user_text):
+        def _go_conviction():
             accepted_option = cd.get("perspective_text", "")
             if accepted_option and accepted_option not in st.session_state.all_options:
                 st.session_state.all_options.append(accepted_option)
             conv_hist = cd.get("conversation_history", [])
-            conv_hist.append({"role": "user", "content": user_text})
+            conv_hist.append({"role": "user", "content": "Yes"})
             new_round = cd.get("rounds", 0) + 1
             rounds_log = cd.get("rounds_log", [])
             rounds_log.append({
@@ -1283,7 +1272,7 @@ elif st.session_state.phase == "challenge":
                 "perspective": cd.get("perspective_text", ""),
                 "question": cd.get("question_text", ""),
                 "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": user_text,
+                "followups": [], "answer": "Yes",
                 "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
                 "answer_key_signal": "", "shifted": True, "still_undecided": False,
                 "how_shifted": "", "leaning": accepted_option or cd.get("leaning", ""),
@@ -1297,14 +1286,12 @@ elif st.session_state.phase == "challenge":
             st.session_state.current_decision = new_cd
             st.rerun()
 
-        if is_convinced:
-            _go_conviction(ca_typed if typed_convinced else "Yes, this could work")
+        if ca_yes:
+            _go_conviction()
 
-        if is_rejected:
+        if ca_no:
             new_cd = dict(cd)
             new_cd["capcs_state"] = "counterattack_rejected"
-            if ca_typed:
-                new_cd["_rejection_context"] = ca_typed
             st.session_state.current_decision = new_cd
             st.rerun()
 
@@ -1378,15 +1365,12 @@ elif st.session_state.phase == "challenge":
             st.rerun()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # STATE: CONVICTION  (5-step closing sequence)
+    # STATE: CONVICTION
     # ══════════════════════════════════════════════════════════════════════════
     elif capcs_state == "conviction":
-        final_choice       = st.session_state.get("_final_choice", "")
-        what_shifted       = st.session_state.get("_what_shifted", "")
-        confidence_stored  = st.session_state.get("_confidence_after", None)
-        conf_confirmed     = st.session_state.get("_confidence_confirmed", False)
+        final_choice = st.session_state.get("_final_choice", "")
 
-        def _save_and_close(fc, ws, conf):
+        def _save_and_close(fc, conf):
             shift = conf - cd.get("confidence_before", 50)
             rounds_log = cd.get("rounds_log", [])
             rounds_log.append({
@@ -1396,10 +1380,10 @@ elif st.session_state.phase == "challenge":
                 "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
                 "perspective": cd.get("perspective_text", ""), "question": "",
                 "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": ws,
+                "followups": [], "answer": "",
                 "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
                 "answer_key_signal": "", "shifted": True, "still_undecided": False,
-                "how_shifted": ws, "leaning": fc or cd.get("leaning", ""),
+                "how_shifted": "", "leaning": fc or cd.get("leaning", ""),
                 "confidence": conf, "shift": shift, "confidence_shift": shift,
             })
             entry = {
@@ -1424,11 +1408,8 @@ elif st.session_state.phase == "challenge":
             save_log(entry)
             st.session_state.session_log.append(entry)
             st.session_state.last_completed_entry = entry
-            # clear conviction state
-            st.session_state.pop("_what_shifted", None)
             st.session_state.pop("_final_choice", None)
             st.session_state["_confidence_after"] = None
-            st.session_state["_confidence_confirmed"] = False
             st.session_state.phase = "feedback"
             st.rerun()
 
@@ -1443,83 +1424,30 @@ elif st.session_state.phase == "challenge":
                     st.session_state["_final_choice"] = opt
                     st.rerun()
 
-        # ── Step 2 — What shifted ─────────────────────────────────────────────
-        elif not what_shifted:
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown(f"What made you land on **{final_choice}**?")
-            scroll_to_chat_bottom()
-            ws_input = st.chat_input("What shifted?", key=f"conviction_shifted_{round_num}")
-            if ws_input and ws_input.strip():
-                st.session_state["_what_shifted"] = ws_input.strip()
-                st.rerun()
-
-        # ── Step 3 — Confidence slider ────────────────────────────────────────
-        elif confidence_stored is None:
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("And how clear do you feel about this now?")
-                live_conf = st.slider(
-                    "Clarity", 0, 100,
-                    cd.get("confidence_before", 50), 5,
-                    label_visibility="collapsed",
-                    key=f"conv_conf_{round_num}"
-                )
-                badge(live_conf)
-            scroll_to_chat_bottom()
-            if st.button("→ That's my number", key=f"conv_conf_set_{round_num}",
-                         use_container_width=True):
-                st.session_state["_confidence_after"] = live_conf
-                st.rerun()
-
-        # ── Step 4 — Confirm confidence ───────────────────────────────────────
-        elif not conf_confirmed:
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown(
-                    f"You're at **{confidence_stored}% clarity** about *{final_choice}*. "
-                    f"Does that feel right?"
-                )
-            scroll_to_chat_bottom()
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Yes, that's where I am", key=f"conv_conf_yes_{round_num}",
-                             type="primary", use_container_width=True):
-                    st.session_state["_confidence_confirmed"] = True
-                    st.rerun()
-            with col2:
-                if st.button("Let me adjust", key=f"conv_conf_adj_{round_num}",
-                             use_container_width=True):
-                    st.session_state["_confidence_after"] = None
-                    st.rerun()
-
-        # ── Step 5 — DDM threshold check ──────────────────────────────────────
+        # ── Step 2 — Confidence + complete ────────────────────────────────────
         else:
-            conf = confidence_stored
             with st.chat_message("user", avatar="👤"):
                 st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
-
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown("How clear do you feel about this now?")
+            live_conf = st.slider(
+                "Clarity", 0, 100,
+                cd.get("confidence_before", 50), 5,
+                label_visibility="collapsed",
+                key=f"conv_conf_{round_num}"
+            )
+            badge(live_conf)
             scroll_to_chat_bottom()
+            st.markdown("")
 
-            if conf >= CONFIDENCE_THRESHOLD:
-                # Threshold reached — offer completion
+            if live_conf >= CONFIDENCE_THRESHOLD:
                 if st.button("✓ Complete session", key=f"conviction_complete_{round_num}",
                              type="primary", use_container_width=True):
-                    _save_and_close(final_choice, what_shifted, conf)
+                    _save_and_close(final_choice, live_conf)
             else:
-                # Below threshold — offer to explore further or close anyway
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(
-                        f"Your thinking hasn't fully settled yet — you're at **{conf}% clarity**. "
+                        f"Your thinking hasn't fully settled yet — you're at **{live_conf}% clarity**. "
                         f"Do you want to explore this a bit further, or are you comfortable deciding here?"
                     )
                 scroll_to_chat_bottom()
@@ -1527,11 +1455,8 @@ elif st.session_state.phase == "challenge":
                 with col1:
                     if st.button("Explore further", key=f"conv_explore_{round_num}",
                                  use_container_width=True):
-                        st.session_state["_what_shifted"] = ""
                         st.session_state["_final_choice"] = ""
                         st.session_state["_confidence_after"] = None
-                        st.session_state["_confidence_confirmed"] = False
-                        # Add confirmed bias + accepted option to rejected lists
                         confirmed = cd.get("confirmed_bias", "")
                         perspective = cd.get("perspective_text", "")
                         rej_biases = list(cd.get("rejected_biases", []))
@@ -1543,7 +1468,7 @@ elif st.session_state.phase == "challenge":
                         loop_ctx = (
                             f"Previously tried bias: '{confirmed}'. "
                             f"Option proposed: '{perspective}'. "
-                            f"User explored this but confidence was only {conf}% — not enough. "
+                            f"User explored this but confidence was only {live_conf}% — not enough. "
                             f"Explore a DIFFERENT angle — do not revisit this bias or option."
                         )
                         new_cd = dict(cd)
@@ -1559,7 +1484,7 @@ elif st.session_state.phase == "challenge":
                 with col2:
                     if st.button("I'm satisfied with this", key=f"conv_satisfied_{round_num}",
                                  type="primary", use_container_width=True):
-                        _save_and_close(final_choice, what_shifted, conf)
+                        _save_and_close(final_choice, live_conf)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
