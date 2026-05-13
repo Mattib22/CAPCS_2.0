@@ -18,7 +18,8 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
                          extract_challenge_fields, get_conversation_message, get_bias, get_explanation,
                          get_perspective, get_question, get_followup_answer, is_followup_question,
                          get_consolidation_question, analyse_answer_quality, detect_response_type,
-                         get_session_recommendation, get_bias_analysis, classify_domain, infer_options)
+                         get_session_recommendation, get_bias_analysis, classify_domain, infer_options,
+                         get_spark_message, extract_spark_fields, has_enough_signal)
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
@@ -819,7 +820,13 @@ elif st.session_state.phase == "input":
                 "timestamp": datetime.now().isoformat(),
                 "rounds": 0,
                 "rounds_log": [],
-                "conversation_history": []
+                "conversation_history": [],
+                "capcs_state": "listening",
+                "listening_answers": 0,
+                "extra_listening": 0,
+                "rejected_biases": [],
+                "rejected_options": [],
+                "confirmed_bias": "",
             }
             st.session_state.sub_state = "present"
             st.session_state.followup_exchanges = []
@@ -893,163 +900,83 @@ elif st.session_state.phase == "generating":
         pass  # no-op — kept so generating logic compiles unchanged
 
     try:
-        turn_num = round_num  # turn_num 1 = opening, 2+ = challenge with bias
-        last_answer = cd.get("last_answer", "")
+        capcs_state = cd.get("capcs_state", "listening")
         emotion = cd.get("answer_signals", {}).get("emotion", "neutral")
         context = cd.get("context", "")
+        listening_answers = cd.get("listening_answers", 0)
 
-        if turn_num == 1:
-            # Turn 1: pure listening — one observation + one question
-            render_overlay("Thinking about what you've shared", "Getting ready...")
-            opening = get_opening_question(
-                cd["decision"], cd["options"],
-                cd["confidence_before"], enriched_profile_str,
-                context, longitudinal_text
-            )
-            cd["conversation_message"] = opening
+        if capcs_state == "listening":
+            if listening_answers == 0:
+                message = get_opening_question(
+                    cd["decision"], cd["options"],
+                    cd["confidence_before"], enriched_profile_str,
+                    context, longitudinal_text
+                )
+            else:
+                message = get_probing_question(
+                    cd["decision"], cd["options"], cd.get("leaning", ""),
+                    cd["confidence_before"], enriched_profile_str,
+                    history_text, cd.get("last_answer", ""), context, longitudinal_text,
+                    turn_num=listening_answers + 1
+                )
+            cd["conversation_message"] = message
             cd["bias_text"] = ""
             cd["explanation_text"] = ""
             cd["perspective_option"] = ""
-            cd["perspective_why"] = ""
             cd["perspective_text"] = ""
-            cd["question_text"] = opening
-            cd["is_probe_turn"] = True
-            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": opening})
+            cd["question_text"] = message
+            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": message})
             st.session_state.current_decision = cd
 
-        elif turn_num <= PROBE_TURNS:
-            # Turns 2 to PROBE_TURNS: deeper probing — no bias named yet
-            render_overlay("Going deeper...", "Listening...")
-            probe = get_probing_question(
-                cd["decision"], cd["options"], cd.get("leaning", ""),
-                cd["confidence_before"], enriched_profile_str,
-                history_text, cd.get("last_answer", ""), context, longitudinal_text,
-                turn_num=turn_num
+        elif capcs_state == "spark":
+            spark_response = get_spark_message(
+                cd.get("conversation_history", []),
+                enriched_profile_str,
+                context,
+                cd.get("rejected_biases", [])
             )
-            cd["conversation_message"] = probe
-            cd["bias_text"] = ""
-            cd["explanation_text"] = ""
+            fields = extract_spark_fields(spark_response)
+            message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
+            cd["conversation_message"] = message
+            cd["bias_text"] = fields["bias_name"]
+            cd["explanation_text"] = fields["bias_explanation"]
             cd["perspective_option"] = ""
-            cd["perspective_why"] = ""
             cd["perspective_text"] = ""
-            cd["question_text"] = probe
-            cd["is_probe_turn"] = True
-            cd.setdefault("conversation_history", []).append({"role": "assistant", "content": probe})
+            cd["question_text"] = ""
+            cd.setdefault("conversation_history", []).append({
+                "role": "assistant", "content": message,
+                "state": "spark", "bias_name": fields["bias_name"],
+                "bias_explanation": fields["bias_explanation"],
+            })
             st.session_state.current_decision = cd
 
-        else:
-            # Turn PROBE_TURNS+1 onwards: full challenge — bias named, perspective offered
-
-            # ── followup_mode: user pushed back — probe first, then new challenge ─
-            is_followup_mode = cd.get("followup_mode", False)
-            if is_followup_mode:
-                pushback_probes = cd.get("pushback_probes_remaining", 0)
-
-                if pushback_probes > 0:
-                    # Still in pushback probing phase — ask a follow-up question
-                    probe = get_probing_question(
-                        cd["decision"], cd["options"], cd.get("leaning", ""),
-                        cd["confidence_before"], enriched_profile_str,
-                        history_text, cd.get("last_answer", ""), context, longitudinal_text,
-                        turn_num=turn_num
-                    )
-                    cd["conversation_message"] = probe
-                    cd["bias_text"] = ""
-                    cd["explanation_text"] = ""
-                    cd["perspective_option"] = ""
-                    cd["perspective_why"] = ""
-                    cd["perspective_text"] = ""
-                    cd["question_text"] = probe
-                    cd["is_probe_turn"] = True
-                    cd["pushback_probes_remaining"] = pushback_probes - 1
-                    cd.setdefault("conversation_history", []).append({"role": "assistant", "content": probe})
-                    st.session_state.current_decision = cd
-                    thinking_ph.empty()
-                    st.session_state.phase = "challenge"
-                    st.rerun()
-
-                else:
-                    # Probing done — generate a new challenge with the full context
-                    cd["followup_mode"] = False
-                    st.session_state.current_decision = cd
-
-                    full_response = get_challenge_response(
-                        cd["decision"], cd["options"], cd.get("leaning", ""),
-                        cd["confidence_before"], enriched_profile_str,
-                        history_text, cd.get("last_answer", ""), context, longitudinal_text,
-                        emotion=emotion, turn_num=turn_num,
-                        is_undecided=is_undecided,
-                        confidence_dropped=confidence_dropped,
-                        sustained_drop=sustained_drop
-                    )
-                    conversation_message = get_conversation_message(full_response)
-                    fields = extract_challenge_fields(full_response)
-                    if not conversation_message and fields.get("question_text"):
-                        conversation_message = fields["question_text"]
-
-                    cd["conversation_message"] = conversation_message
-                    cd["bias_text"] = fields["bias_text"]
-                    cd["explanation_text"] = fields["explanation_text"]
-                    cd["perspective_option"] = fields["perspective_text"]
-                    cd["perspective_text"] = fields["perspective_text"]
-                    cd["question_text"] = fields["question_text"]
-                    cd["is_probe_turn"] = False
-                    cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
-                    st.session_state.current_decision = cd
-
-                    if fields["perspective_text"] and fields["perspective_text"] not in st.session_state.all_options:
-                        st.session_state.all_options.append(fields["perspective_text"])
-
-                    thinking_ph.empty()
-                    st.session_state.phase = "challenge"
-                    st.rerun()
-
-            # ── Normal challenge generation ────────────────────────────────────
+        elif capcs_state == "counterattack":
+            confirmed_bias = cd.get("confirmed_bias", "")
             full_response = get_challenge_response(
                 cd["decision"], cd["options"], cd.get("leaning", ""),
                 cd["confidence_before"], enriched_profile_str,
-                history_text, cd.get("last_answer",""), context, longitudinal_text,
-                emotion=emotion, turn_num=turn_num,
+                history_text, cd.get("last_answer", ""), context, longitudinal_text,
+                emotion=emotion, turn_num=round_num,
                 is_undecided=is_undecided,
-                confidence_dropped=confidence_dropped,
-                sustained_drop=sustained_drop
+                confirmed_bias=confirmed_bias
             )
             conversation_message = get_conversation_message(full_response)
             fields = extract_challenge_fields(full_response)
-
             if not conversation_message and fields.get("question_text"):
                 conversation_message = fields["question_text"]
-
             option_name = fields["perspective_text"]
-            existing_opts = [o.lower() for o in split_options(cd.get("options", ""))]
-            existing_opts += [o.lower() for o in st.session_state.all_options]
-
-            def _too_similar(gen, existing):
-                for e in existing:
-                    gen_words = set(gen.split())
-                    ex_words = set(e.split())
-                    if not gen_words or not ex_words: continue
-                    if len(gen_words & ex_words) / min(len(gen_words), len(ex_words)) > 0.6:
-                        return True
-                return False
-
             cd["conversation_message"] = conversation_message
-            cd["bias_text"] = fields["bias_text"]
+            cd["bias_text"] = fields["bias_text"] or confirmed_bias
             cd["explanation_text"] = fields["explanation_text"]
             cd["perspective_option"] = option_name
-            cd["perspective_why"] = ""
             cd["perspective_text"] = option_name
             cd["question_text"] = fields["question_text"]
-            cd["is_probe_turn"] = False
             cd.setdefault("conversation_history", []).append({"role": "assistant", "content": conversation_message})
+            if option_name and option_name not in st.session_state.all_options:
+                st.session_state.all_options.append(option_name)
             st.session_state.current_decision = cd
 
-            if option_name and not _too_similar(option_name.lower(), existing_opts):
-                if option_name not in st.session_state.all_options:
-                    st.session_state.all_options.append(option_name)
-
         thinking_ph.empty()
-
         st.session_state.phase = "challenge"
         st.rerun()
 
@@ -1059,337 +986,393 @@ elif st.session_state.phase == "generating":
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# PHASE 2 — CHALLENGE LOOP
+# PHASE 2 — CHALLENGE LOOP  (state machine: listening → spark → counterattack → conviction)
 # ════════════════════════════════════════════════════════════════════════════════
 elif st.session_state.phase == "challenge":
     if not st.session_state.get("consent_given"):
         st.session_state.phase = "consent"; st.rerun()
+
     cd = st.session_state.current_decision
-    profile = load_profile()
-    observed_profile = st.session_state.get("observed_profile", {})
-    # Load bias corrections — always passed to format_profile so they work from session 1
+    capcs_state = cd.get("capcs_state", "listening")
     user_key_corr = st.session_state.get("user_key", "")
     bias_corrections = load_bias_corrections(user_key_corr) if user_key_corr else {}
-    # Enrich the profile string with observed behaviour and corrections
-    enriched_profile_str = format_profile(profile, observed_profile, bias_corrections)
     round_num = cd.get("rounds", 0) + 1
-    sub_state = st.session_state.sub_state
-    history_text = build_history(cd.get("rounds_log", []))
-    # Build longitudinal context from past sessions (cached to avoid repeated DB calls)
-    if not st.session_state.get("longitudinal_text"):
-        past_sessions = load_log()
-        past_completed = [h for h in past_sessions if h.get("completed_at")]
-        st.session_state.longitudinal_text = build_longitudinal_context(past_completed)
-    longitudinal_text = st.session_state.longitudinal_text
-
-    # Detect confidence drop pattern
-    # Within a round: confidence_before → confidence_after (stored as "confidence")
-    # A drop means the round REDUCED the user's confidence.
-    # Sustained drop = 2+ consecutive rounds where confidence decreased within the round.
-    rounds_log_so_far = cd.get("rounds_log", [])
-    confidence_dropped = False
-    sustained_drop = False
-    if len(rounds_log_so_far) >= 1:
-        last_shift = rounds_log_so_far[-1].get("shift", 0) or 0
-        if last_shift < 0:
-            confidence_dropped = True
-        # 2+ consecutive drops
-        if len(rounds_log_so_far) >= 2:
-            prev_shift = rounds_log_so_far[-2].get("shift", 0) or 0
-            if last_shift < 0 and prev_shift < 0:
-                sustained_drop = True
-
     CONFIDENCE_THRESHOLD = st.session_state.get("confidence_threshold", 75)
-    is_undecided = cd.get("is_undecided", False)
 
-    # Subtle abandon link — preserves session_state so user can resume by re-entering input
+    # Pause button
     col_back, _ = st.columns([1, 4])
     with col_back:
-        if st.button("← Pause session", key="pause_session_btn", help="Pause and view profile or settings — your progress will be kept"):
+        if st.button("← Pause session", key="pause_session_btn",
+                     help="Pause and view profile or settings — your progress will be kept"):
             st.session_state.phase = "input"
             st.rerun()
 
-    if sustained_drop:
-        box("⚠️ Your confidence has been dropping across multiple rounds. CAPCS is shifting focus — instead of new challenges, we'll help you identify what you already know.", style="warning")
-    elif confidence_dropped and not cd.get("is_probe_turn"):
-        st.caption("⚠️ Your confidence dropped last round — this round will focus on simplifying your thinking.")
-
-    # ── PRESENT ──────────────────────────────────────────────────────────────
-    if sub_state == "present":
-        if "conversation_message" not in cd and "bias_text" not in cd:
-            st.session_state.phase = "generating"
-            st.rerun()
-
-        # Build chat history from rounds log — show full conversation
-        for r in cd.get("rounds_log", []):
-            # CAPCS message
-            capcs_msg = r.get("conversation_message") or r.get("question", "")
-            if capcs_msg:
-                with st.chat_message("assistant", avatar="🧑‍🏫"):
-                    st.markdown(capcs_msg)
-                # Bias insight box for past challenge rounds
-                bias_n = r.get("bias","").split("—")[0].strip()[:60]
+    # ── Conversation history from rounds_log ──────────────────────────────────
+    for r in cd.get("rounds_log", []):
+        capcs_msg = r.get("conversation_message") or r.get("question", "")
+        if capcs_msg:
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown(capcs_msg)
+            if r.get("round_state") == "spark":
+                bias_n = r.get("bias", "").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
-            # User's answer
-            if r.get("answer"):
-                with st.chat_message("user", avatar="👤"):
-                    st.markdown(r["answer"])
+                    with st.expander("💡 What I noticed in your thinking", expanded=False):
+                        st.markdown(f"**{bias_n}**")
+                        st.markdown(r.get("explanation", ""))
+        ans = r.get("answer", "")
+        if ans and not ans.startswith("["):
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(ans)
 
-        # Current CAPCS message
-        conversation_msg = cd.get("conversation_message") or cd.get("question_text", "")
+    # ── Current CAPCS message ─────────────────────────────────────────────────
+    conversation_msg = cd.get("conversation_message", "")
+    if conversation_msg and capcs_state != "conviction":
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(conversation_msg)
 
-        # Bias insight box — always visible on challenge turns (not probe turns)
-        bias_name_short = cd.get("bias_text", "").split("—")[0].strip()[:60]
-        if not cd.get("is_probe_turn") and bias_name_short and cd.get("explanation_text"):
-            box(
-                f"<b>💡 {bias_name_short}</b><br>{cd.get('explanation_text', '')}",
-                style="insight"
-            )
-            uk = st.session_state.get("user_key", "")
-            existing_corrections = load_bias_corrections(uk) if uk else {}
-            existing_corr = existing_corrections.get(bias_name_short, {})
-            if existing_corr:
-                prev = {
-                    "accurate": "✅ confirmed",
-                    "inaccurate": "❌ didn't fit",
-                    "partial": "🔶 partially"
-                }.get(existing_corr.get("verdict", ""), "")
-                st.caption(f"Previously marked: {prev} — update your rating:")
-            else:
-                st.caption("Does this resonate with you?")
-            kb = f"bias_ack_{bias_name_short[:15].replace(' ','_')}_{round_num}"
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True):
-                    save_bias_correction(uk, bias_name_short, "accurate", "")
-                    st.rerun()
-            with col2:
-                if st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True):
-                    save_bias_correction(uk, bias_name_short, "partial", "")
-                    st.rerun()
-            with col3:
-                if st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True):
-                    save_bias_correction(uk, bias_name_short, "inaccurate", "")
-                    st.rerun()
+    scroll_to_chat_bottom()
 
-        # Previous follow-up exchanges this round
-        if st.session_state.followup_exchanges:
-            for exc in st.session_state.followup_exchanges:
-                with st.chat_message("user", avatar="👤"):
-                    st.markdown(exc["question"])
-                with st.chat_message("assistant", avatar="🧑‍🏫"):
-                    st.markdown(exc["answer"])
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATE: LISTENING
+    # ══════════════════════════════════════════════════════════════════════════
+    if capcs_state == "listening":
+        if not conversation_msg:
+            st.session_state.phase = "generating"; st.rerun()
 
-        scroll_to_chat_bottom()
-
-        # ── Chat input for user response ──────────────────────────────────────
         inline_answer = st.chat_input(
-            "Respond, push back, or think out loud...",
-            key=f"chat_answer_{round_num}"
+            "Respond, think out loud...",
+            key=f"chat_listen_{round_num}"
         )
-
         if inline_answer and inline_answer.strip():
-            cd["user_answer"] = inline_answer.strip()
-            cd["last_answer"] = inline_answer.strip()
+            answer = inline_answer.strip()
+            conv_hist = cd.get("conversation_history", [])
+            conv_hist.append({"role": "user", "content": answer})
 
-            with st.spinner("Reading your answer..."):
-                signals = analyse_answer_quality(inline_answer, cd.get("question_text", ""))
-                cd["answer_signals"] = signals
+            with st.spinner(""):
+                signals = analyse_answer_quality(answer, cd.get("question_text", ""))
 
-            if cd.get("is_probe_turn"):
-                # Probe turn: carry history forward, then go to next turn
-                conv_hist = cd.get("conversation_history", [])
-                conv_hist.append({"role": "user", "content": inline_answer.strip()})
-                rounds_log = cd.get("rounds_log", [])
-                rounds_log.append({
-                    "round": round_num, "round_number": round_num,
-                    "timestamp": datetime.now().isoformat(),
-                    "bias": "", "explanation": "", "perspective": "",
-                    "question": cd.get("question_text", ""),
-                    "conversation_message": cd.get("conversation_message", ""),
-                    "followups": [],
-                    "answer": inline_answer.strip(),
-                    "answer_depth": signals.get("depth", ""),
-                    "answer_emotion": signals.get("emotion", ""),
-                    "answer_certainty": signals.get("certainty", ""),
-                    "answer_key_signal": signals.get("key_signal", ""),
-                    "shifted": False, "still_undecided": False,
-                    "how_shifted": "", "leaning": cd.get("leaning", ""),
-                    "confidence": cd.get("confidence_before", 50),
-                    "shift": 0, "confidence_shift": 0,
-                })
-                st.session_state.current_decision = {
-                    "decision": cd["decision"],
-                    "decision_short": cd.get("decision_short", ""),
-                    "context": cd.get("context", ""),
-                    "options": cd["options"],
-                    "leaning": cd.get("leaning", ""),
-                    "is_undecided": cd.get("is_undecided", False),
-                    "confidence_before": cd["confidence_before"],
-                    "confidence_start": cd["confidence_start"],
-                    "timestamp": cd["timestamp"],
-                    "rounds": round_num,
-                    "rounds_log": rounds_log,
-                    "last_answer": inline_answer.strip(),
-                    "conversation_history": conv_hist,
-                    "followup_mode": cd.get("followup_mode", False),
-                    "pushback_probes_remaining": cd.get("pushback_probes_remaining", 0),
-                }
-                st.session_state.sub_state = "present"
-                st.session_state.followup_exchanges = []
-                st.session_state.phase = "generating"
-                st.rerun()
+            listening_answers = cd.get("listening_answers", 0) + 1
+            extra_listening = cd.get("extra_listening", 0)
+            new_round = cd.get("rounds", 0) + 1
 
-            # Challenge turn — detect response type (turn_num is challenge-specific: 1 = first challenge)
-            response_type = detect_response_type(inline_answer, round_num - PROBE_TURNS)
+            rounds_log = cd.get("rounds_log", [])
+            rounds_log.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "listening",
+                "timestamp": datetime.now().isoformat(),
+                "bias": "", "explanation": "", "perspective": "",
+                "question": cd.get("question_text", ""),
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": answer,
+                "answer_depth": signals.get("depth", ""),
+                "answer_emotion": signals.get("emotion", ""),
+                "answer_certainty": signals.get("certainty", ""),
+                "answer_key_signal": signals.get("key_signal", ""),
+                "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": cd.get("confidence_before", 50),
+                "shift": 0, "confidence_shift": 0,
+            })
 
-            if response_type == "not_convinced":
-                # User is not convinced — probe for PROBE_TURNS more turns before new bias
-                cd.setdefault("conversation_history", []).append({"role": "user", "content": inline_answer.strip()})
-                rounds_log = cd.get("rounds_log", [])
-                rounds_log.append({
-                    "round": round_num, "round_number": round_num,
-                    "timestamp": datetime.now().isoformat(),
-                    "bias": cd.get("bias_text", ""),
-                    "explanation": cd.get("explanation_text", ""),
-                    "perspective": cd.get("perspective_text", ""),
-                    "question": cd.get("question_text", ""),
-                    "conversation_message": cd.get("conversation_message", ""),
-                    "followups": st.session_state.followup_exchanges,
-                    "answer": inline_answer.strip(),
-                    "answer_depth": signals.get("depth", ""),
-                    "answer_emotion": signals.get("emotion", ""),
-                    "answer_certainty": signals.get("certainty", ""),
-                    "answer_key_signal": signals.get("key_signal", ""),
-                    "shifted": False, "still_undecided": False,
-                    "how_shifted": "", "leaning": cd.get("leaning", ""),
-                    "confidence": cd.get("confidence_before", 50),
-                    "shift": 0, "confidence_shift": 0,
-                })
-                cd["followup_mode"] = True
-                cd["pushback_probes_remaining"] = PROBE_TURNS
-                cd["rounds"] = round_num
-                cd["rounds_log"] = rounds_log
-                st.session_state.current_decision = cd
-                st.session_state.followup_exchanges = []
-                st.session_state.phase = "generating"
+            # Decide next state
+            if extra_listening > 0:
+                new_extra = extra_listening - 1
+                next_state = "spark" if new_extra == 0 else "listening"
+            elif listening_answers >= 3:
+                next_state = "spark"
+                new_extra = 0
+            elif listening_answers >= 2:
+                with st.spinner(""):
+                    next_state = "spark" if has_enough_signal(conv_hist) else "listening"
+                new_extra = 0
             else:
-                # convinced or position — move to closing sequence
-                st.session_state.current_decision = cd
-                st.session_state.sub_state = "shifted"
-                st.session_state.show_followup = False
+                next_state = "listening"
+                new_extra = 0
+
+            st.session_state.current_decision = {
+                "decision": cd["decision"],
+                "decision_short": cd.get("decision_short", ""),
+                "context": cd.get("context", ""),
+                "options": cd["options"],
+                "leaning": cd.get("leaning", ""),
+                "is_undecided": cd.get("is_undecided", False),
+                "confidence_before": cd["confidence_before"],
+                "confidence_start": cd["confidence_start"],
+                "timestamp": cd["timestamp"],
+                "rounds": new_round,
+                "rounds_log": rounds_log,
+                "last_answer": answer,
+                "conversation_history": conv_hist,
+                "capcs_state": next_state,
+                "listening_answers": listening_answers,
+                "extra_listening": new_extra,
+                "rejected_biases": cd.get("rejected_biases", []),
+                "rejected_options": cd.get("rejected_options", []),
+                "confirmed_bias": cd.get("confirmed_bias", ""),
+                "answer_signals": signals,
+            }
+            st.session_state.phase = "generating"
             st.rerun()
 
-    # ── SHIFTED — closing sequence ────────────────────────────────────────────
-    elif sub_state == "shifted":
-        # Show full conversation history
-        for r in cd.get("rounds_log", []):
-            capcs_msg = r.get("conversation_message") or r.get("question", "")
-            if capcs_msg:
-                with st.chat_message("assistant", avatar="🧑‍🏫"):
-                    st.markdown(capcs_msg)
-                bias_n = r.get("bias", "").split("—")[0].strip()[:60]
-                if bias_n and r.get("explanation"):
-                    box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
-            if r.get("answer"):
-                with st.chat_message("user", avatar="👤"):
-                    st.markdown(r["answer"])
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATE: SPARK
+    # ══════════════════════════════════════════════════════════════════════════
+    elif capcs_state == "spark":
+        bias_name_short = cd.get("bias_text", "").split("—")[0].strip()[:60]
+        if not bias_name_short:
+            st.session_state.phase = "generating"; st.rerun()
 
-        # Show current exchange
+        uk = user_key_corr
+        existing_corrections = load_bias_corrections(uk) if uk else {}
+        existing_corr = existing_corrections.get(bias_name_short, {})
+
+        with st.expander("💡 What I noticed in your thinking", expanded=True):
+            st.markdown(f"**{bias_name_short}**")
+            st.markdown(cd.get("explanation_text", ""))
+            if existing_corr:
+                prev = {
+                    "accurate": "✅ confirmed", "inaccurate": "❌ didn't fit",
+                    "partial": "🔶 partially"
+                }.get(existing_corr.get("verdict", ""), "")
+                st.caption(f"Previously marked: {prev} — update:")
+            kb = f"spark_{bias_name_short[:15].replace(' ','_')}_{round_num}"
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                resonates = st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True)
+            with col2:
+                partially = st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True)
+            with col3:
+                doesnt_fit = st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True)
+
+        if resonates or partially:
+            verdict = "accurate" if resonates else "partial"
+            save_bias_correction(uk, bias_name_short, verdict, "")
+            new_round = cd.get("rounds", 0) + 1
+            rounds_log = cd.get("rounds_log", [])
+            rounds_log.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "spark",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": "", "question": "",
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": f"[{verdict}]",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
+            })
+            new_cd = dict(cd)
+            new_cd["rounds"] = new_round
+            new_cd["rounds_log"] = rounds_log
+            new_cd["confirmed_bias"] = bias_name_short
+            new_cd["capcs_state"] = "counterattack"
+            st.session_state.current_decision = new_cd
+            st.session_state.phase = "generating"
+            st.rerun()
+
+        if doesnt_fit:
+            save_bias_correction(uk, bias_name_short, "inaccurate", "")
+            new_round = cd.get("rounds", 0) + 1
+            rounds_log = cd.get("rounds_log", [])
+            rounds_log.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "spark_rejected",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": "", "question": "",
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": "[inaccurate]",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
+            })
+            rejected = cd.get("rejected_biases", [])
+            if bias_name_short not in rejected:
+                rejected.append(bias_name_short)
+            new_cd = dict(cd)
+            new_cd["rounds"] = new_round
+            new_cd["rounds_log"] = rounds_log
+            new_cd["rejected_biases"] = rejected
+            new_cd["extra_listening"] = 2
+            new_cd["capcs_state"] = "listening"
+            st.session_state.current_decision = new_cd
+            st.session_state.phase = "generating"
+            st.rerun()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATE: COUNTERATTACK
+    # ══════════════════════════════════════════════════════════════════════════
+    elif capcs_state == "counterattack":
+        if not conversation_msg:
+            st.session_state.phase = "generating"; st.rerun()
+
+        st.markdown("")
+        col1, col2 = st.columns(2)
+        with col1:
+            ca_yes = st.button("Yes, this could work", key=f"ca_yes_{round_num}",
+                               type="primary", use_container_width=True)
+        with col2:
+            ca_no = st.button("No, this doesn't work for me", key=f"ca_no_{round_num}",
+                              use_container_width=True)
+
+        if ca_yes:
+            conv_hist = cd.get("conversation_history", [])
+            conv_hist.append({"role": "user", "content": "Yes, this could work"})
+            new_round = cd.get("rounds", 0) + 1
+            rounds_log = cd.get("rounds_log", [])
+            rounds_log.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "counterattack",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": cd.get("perspective_text", ""),
+                "question": cd.get("question_text", ""),
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": "Yes, this could work",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": True, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("perspective_text", cd.get("leaning", "")),
+                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
+            })
+            new_cd = dict(cd)
+            new_cd["rounds"] = new_round
+            new_cd["rounds_log"] = rounds_log
+            new_cd["conversation_history"] = conv_hist
+            new_cd["capcs_state"] = "conviction"
+            st.session_state.current_decision = new_cd
+            st.rerun()
+
+        if ca_no:
+            new_cd = dict(cd)
+            new_cd["capcs_state"] = "counterattack_rejected"
+            st.session_state.current_decision = new_cd
+            st.rerun()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATE: COUNTERATTACK_REJECTED — ask why, then loop back to listening
+    # ══════════════════════════════════════════════════════════════════════════
+    elif capcs_state == "counterattack_rejected":
         with st.chat_message("assistant", avatar="🧑‍🏫"):
-            st.markdown(cd.get("conversation_message") or cd.get("question_text", ""))
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(cd.get("user_answer", ""))
-
-        # Step 1 — CAPCS asks what shifted
-        bias_short = cd.get("bias_text", "").split("—")[0].strip()
-        if bias_short:
-            shifted_q = f"What shifted for you? Was it recognising the {bias_short}, the new option, or something else?"
-        else:
-            shifted_q = "What shifted for you — what made something click?"
-
-        with st.chat_message("assistant", avatar="🧑‍🏫"):
-            st.markdown(shifted_q)
-
+            st.markdown("What specifically doesn't work about it?")
         scroll_to_chat_bottom()
 
-        CONFIDENCE_THRESHOLD = st.session_state.get("confidence_threshold", 75)
+        why_not = st.chat_input("What doesn't work?", key=f"ca_reject_{round_num}")
+        if why_not and why_not.strip():
+            answer = why_not.strip()
+            conv_hist = cd.get("conversation_history", [])
+            conv_hist.append({"role": "user", "content": answer})
+            new_round = cd.get("rounds", 0) + 1
+            rounds_log = cd.get("rounds_log", [])
+            rejected_opts = cd.get("rejected_options", [])
+            perspective = cd.get("perspective_text", "")
+            if perspective and perspective not in rejected_opts:
+                rejected_opts.append(perspective)
+            rounds_log.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "counterattack_rejected",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": perspective, "question": "",
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": answer,
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
+            })
+            st.session_state.current_decision = {
+                "decision": cd["decision"],
+                "decision_short": cd.get("decision_short", ""),
+                "context": cd.get("context", ""),
+                "options": cd["options"],
+                "leaning": cd.get("leaning", ""),
+                "is_undecided": cd.get("is_undecided", False),
+                "confidence_before": cd["confidence_before"],
+                "confidence_start": cd["confidence_start"],
+                "timestamp": cd["timestamp"],
+                "rounds": new_round,
+                "rounds_log": rounds_log,
+                "last_answer": answer,
+                "conversation_history": conv_hist,
+                "capcs_state": "listening",
+                "listening_answers": cd.get("listening_answers", 0),
+                "extra_listening": 2,
+                "rejected_biases": cd.get("rejected_biases", []),
+                "rejected_options": rejected_opts,
+                "confirmed_bias": "",
+                "answer_signals": {},
+            }
+            st.session_state.phase = "generating"
+            st.rerun()
 
-        if not st.session_state.get("_what_shifted"):
-            # Gate 1: waiting for "what shifted" answer
-            what_shifted_input = st.chat_input(
-                "What shifted your thinking?",
-                key=f"chat_shifted_{round_num}"
-            )
-            if what_shifted_input and what_shifted_input.strip():
-                st.session_state["_what_shifted"] = what_shifted_input.strip()
-                st.rerun()
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATE: CONVICTION
+    # ══════════════════════════════════════════════════════════════════════════
+    elif capcs_state == "conviction":
+        final_choice = st.session_state.get("_final_choice", "")
+        what_shifted = st.session_state.get("_what_shifted", "")
 
-        elif not st.session_state.get("_final_choice"):
-            # Gate 2: user answered what shifted — now pick the option
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(st.session_state["_what_shifted"])
-
-            all_opts = st.session_state.get("all_options", [])
+        # Step 1 — Pick an option
+        if not final_choice:
             with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("Which option feels right for you now?")
-
+                st.markdown("Based on everything we've explored, which of these feels most true to where you've landed?")
             scroll_to_chat_bottom()
             st.markdown("")
-            for i, opt in enumerate(all_opts):
-                if st.button(opt, key=f"final_opt_{i}", use_container_width=True):
+            for i, opt in enumerate(st.session_state.get("all_options", [])):
+                if st.button(opt, key=f"conviction_opt_{i}", use_container_width=True):
                     st.session_state["_final_choice"] = opt
                     st.rerun()
 
-        else:
-            # Gate 3: option selected — ask confidence and complete
+        # Step 2 — What made you land there?
+        elif not what_shifted:
             with st.chat_message("user", avatar="👤"):
-                st.markdown(st.session_state["_what_shifted"])
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(f"Going with: **{st.session_state['_final_choice']}**")
-
+                st.markdown(f"Going with: **{final_choice}**")
             with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("And how confident do you feel about this now?")
+                st.markdown(f"What made you land on **{final_choice}**?")
+            scroll_to_chat_bottom()
+            ws_input = st.chat_input("What shifted?", key=f"conviction_shifted_{round_num}")
+            if ws_input and ws_input.strip():
+                st.session_state["_what_shifted"] = ws_input.strip()
+                st.rerun()
 
-            confidence_after = st.slider(
-                "Confidence now", 0, 100,
-                cd.get("confidence_before", 50), 5,
-                label_visibility="collapsed",
-                key=f"conf_after_{round_num}"
-            )
-            badge(confidence_after)
+        # Step 3 — Confidence + Complete
+        else:
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(f"Going with: **{final_choice}**")
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(what_shifted)
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown("And how clear do you feel about this now?")
+                confidence_after = st.slider(
+                    "Confidence", 0, 100,
+                    cd.get("confidence_before", 50), 5,
+                    label_visibility="collapsed",
+                    key=f"conv_conf_{round_num}"
+                )
+                badge(confidence_after)
+
             shift = confidence_after - cd.get("confidence_before", 50)
-
             scroll_to_chat_bottom()
 
-            if st.button("✓ Complete session", key=f"challenge_continue_btn_{round_num}", type="primary", use_container_width=True):
-                what_shifted = st.session_state.pop("_what_shifted", "")
-                final_choice = st.session_state.pop("_final_choice", "")
+            if st.button("✓ Complete session", key=f"conviction_complete_{round_num}",
+                         type="primary", use_container_width=True):
+                ws = st.session_state.pop("_what_shifted", "")
+                fc = st.session_state.pop("_final_choice", "")
                 rounds_log = cd.get("rounds_log", [])
                 rounds_log.append({
                     "round": round_num, "round_number": round_num,
+                    "round_state": "conviction",
                     "timestamp": datetime.now().isoformat(),
-                    "bias": cd.get("bias_text", ""),
-                    "explanation": cd.get("explanation_text", ""),
-                    "perspective": cd.get("perspective_text", ""),
-                    "question": cd.get("question_text", ""),
+                    "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                    "perspective": cd.get("perspective_text", ""), "question": "",
                     "conversation_message": cd.get("conversation_message", ""),
-                    "followups": st.session_state.followup_exchanges,
-                    "answer": cd.get("user_answer", ""),
-                    "answer_depth": cd.get("answer_signals", {}).get("depth", ""),
-                    "answer_emotion": cd.get("answer_signals", {}).get("emotion", ""),
-                    "answer_certainty": cd.get("answer_signals", {}).get("certainty", ""),
-                    "answer_key_signal": cd.get("answer_signals", {}).get("key_signal", ""),
-                    "shifted": True,
-                    "still_undecided": False,
-                    "how_shifted": what_shifted,
-                    "leaning": final_choice or cd.get("leaning", ""),
-                    "confidence": confidence_after,
-                    "shift": shift,
-                    "confidence_shift": shift,
+                    "followups": [], "answer": ws,
+                    "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                    "answer_key_signal": "", "shifted": True, "still_undecided": False,
+                    "how_shifted": ws, "leaning": fc or cd.get("leaning", ""),
+                    "confidence": confidence_after, "shift": shift, "confidence_shift": shift,
                 })
                 entry = {
                     "user_key": st.session_state.get("user_key", ""),
@@ -1397,7 +1380,7 @@ elif st.session_state.phase == "challenge":
                     "context": cd.get("context", ""),
                     "options": cd.get("options", ""),
                     "all_options": st.session_state.all_options,
-                    "final_choice": final_choice or cd.get("leaning", ""),
+                    "final_choice": fc or cd.get("leaning", ""),
                     "confidence_start": cd.get("confidence_start", confidence_after),
                     "confidence_final": confidence_after,
                     "confidence_shift": confidence_after - cd.get("confidence_start", confidence_after),

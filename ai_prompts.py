@@ -118,11 +118,9 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
                            history, last_answer, context, longitudinal="",
                            emotion="neutral", turn_num=2,
                            is_undecided=False, confidence_dropped=False,
-                           sustained_drop=False):
+                           sustained_drop=False, confirmed_bias=""):
     """
-    Turn 2+. The spark turn.
-    One conversational message: reflects → names bias naturally → introduces
-    new perspective → ends with challenge question on the NEW perspective.
+    State: counterattack. User confirmed a bias. Introduce the direct antidote option.
     Also returns extractable structured fields in a hidden block for Supabase.
     """
     long_section = f"\n{longitudinal}" if longitudinal else ""
@@ -140,6 +138,40 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
     drop_note = "The user's confidence has been dropping. Shift to simplifying — identify what is making this feel more complex than it needs to be." if sustained_drop else (
         "The user's confidence dropped last turn — this turn should simplify, not add complexity." if confidence_dropped else ""
     )
+
+    confirmed_instruction = ""
+    if confirmed_bias:
+        confirmed_instruction = f"""The user has confirmed that **{confirmed_bias}** resonates with them — do not re-name or re-explain it.
+
+Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
+1. REFLECT (1 sentence): Reference something specific the user said that shows this bias at work, using their words.
+2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The connection must be explicit: "Because {confirmed_bias} pulls you toward X, the counterforce is Y — which works by [mechanism]." Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
+
+Tone: warm, direct. Final sentence must end with a question mark."""
+
+    if confirmed_instruction:
+        prompt = f"""You are a thinking partner helping someone work through a real decision.
+
+{confirmed_instruction}
+
+---EXTRACT---
+BIAS: [bias name only — max 6 words]
+EXPLANATION: [what this bias is and why it appeared — max 40 words]
+PERSPECTIVE: [the counterattacking option — max 8 words]
+QUESTION: [exact evaluation question from above]
+---END---
+
+FULL CONVERSATION — read every turn before writing anything:
+{history}
+
+DECISION: {decision}
+OPTIONS CONSIDERED SO FAR: {options}
+LEANING: {leaning or 'genuinely undecided'}
+CONFIDENCE: {confidence}%
+CONTEXT: {context}
+PROFILE:
+{profile_str}{long_section}"""
+        return ask_ai(prompt, 4096)
 
     prompt = f"""You are a thinking partner helping someone work through a real decision. You have been listening for {turn_num} turns.
 
@@ -490,6 +522,80 @@ Definitions:
         return default
     except Exception:
         return default
+
+
+def has_enough_signal(conversation_history: list) -> bool:
+    """Lightweight check: enough signal in conversation to name a specific earned bias?"""
+    history_text = "\n".join([
+        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history
+    ])
+    prompt = f"""Read this conversation carefully.
+
+{history_text}
+
+Is there enough signal in the user's answers to identify a specific, earned cognitive bias — one grounded in what they actually said across their responses, not a generic one?
+
+Answer YES or NO only. Nothing else."""
+    result = ask_ai(prompt, 10)
+    return result.strip().upper().startswith("YES")
+
+
+def get_spark_message(conversation_history: list, profile_str: str, context: str,
+                      rejected_biases: list = None) -> str:
+    """
+    State: spark. Names and explains the bias. No option. No question. Max 60 words.
+    Returns the narrative followed by:
+    BIAS_NAME: [bias name only, max 6 words]
+    BIAS_EXPLANATION: [one plain English sentence]
+    """
+    history_text = "\n".join([
+        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history
+    ])
+    rejected_note = ""
+    if rejected_biases:
+        rejected_note = (
+            f"\nThe following biases were already tried and the user said they don't "
+            f"resonate — do not use them: {', '.join(rejected_biases)}."
+        )
+
+    prompt = f"""Read the full conversation below carefully.
+
+{history_text}
+
+Identify the single most specific cognitive bias active in this person's thinking — not a generic one, a specific one earned from what they said across ALL their answers. Use patterns across multiple responses, not just the last one.
+
+Write 2-3 sentences, MAXIMUM 60 WORDS TOTAL (count strictly):
+1. Reflect something specific the user said, using their own words
+2. Name the bias naturally mid-sentence as a revelation, not a label: "that feeling of X is called Y"
+3. Explain in plain English what this bias is doing to their thinking
+
+Do NOT introduce any option. Do NOT ask a question. Do NOT offer advice.{rejected_note}
+
+Then output on a new line:
+BIAS_NAME: [bias name only, max 6 words]
+BIAS_EXPLANATION: [one plain English sentence, max 25 words]
+
+CONTEXT: {context}
+PROFILE:
+{profile_str}"""
+    return ask_ai(prompt, 600)
+
+
+def extract_spark_fields(spark_response: str) -> dict:
+    """Parse BIAS_NAME and BIAS_EXPLANATION from get_spark_message output."""
+    result = {"spark_message": "", "bias_name": "", "bias_explanation": ""}
+    message_lines = []
+    for line in spark_response.strip().split("\n"):
+        if line.startswith("BIAS_NAME:"):
+            result["bias_name"] = line.replace("BIAS_NAME:", "").strip()
+        elif line.startswith("BIAS_EXPLANATION:"):
+            result["bias_explanation"] = line.replace("BIAS_EXPLANATION:", "").strip()
+        else:
+            message_lines.append(line)
+    result["spark_message"] = "\n".join(l for l in message_lines if l.strip()).strip()
+    return result
 
 
 def detect_response_type(user_message: str, turn_num: int = 99) -> str:
