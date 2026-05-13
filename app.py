@@ -1241,6 +1241,11 @@ elif st.session_state.phase == "challenge":
                               use_container_width=True)
 
         if ca_yes:
+            # Ensure the accepted CAPCS option is in the options list for conviction
+            accepted_option = cd.get("perspective_text", "")
+            if accepted_option and accepted_option not in st.session_state.all_options:
+                st.session_state.all_options.append(accepted_option)
+
             conv_hist = cd.get("conversation_history", [])
             conv_hist.append({"role": "user", "content": "Yes, this could work"})
             new_round = cd.get("rounds", 0) + 1
@@ -1256,7 +1261,7 @@ elif st.session_state.phase == "challenge":
                 "followups": [], "answer": "Yes, this could work",
                 "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
                 "answer_key_signal": "", "shifted": True, "still_undecided": False,
-                "how_shifted": "", "leaning": cd.get("perspective_text", cd.get("leaning", "")),
+                "how_shifted": "", "leaning": accepted_option or cd.get("leaning", ""),
                 "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
             })
             new_cd = dict(cd)
