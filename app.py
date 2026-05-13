@@ -877,12 +877,16 @@ elif st.session_state.phase == "generating":
         if capcs_msg:
             with st.chat_message("assistant", avatar="🧑‍🏫"):
                 st.markdown(capcs_msg)
-            bias_n = r.get("bias", "").split("—")[0].strip()[:60]
-            if bias_n and r.get("explanation"):
-                box(f"<b>💡 {bias_n}</b><br>{r.get('explanation','')}", style="insight")
-        if r.get("answer"):
+            if r.get("round_state") == "spark":
+                bias_n = r.get("bias", "").split("—")[0].strip()[:60]
+                if bias_n and r.get("explanation"):
+                    with st.expander("💡 What I noticed in your thinking", expanded=False):
+                        st.markdown(f"**{bias_n}**")
+                        st.markdown(r.get("explanation", ""))
+        ans = r.get("answer", "")
+        if ans and not ans.startswith("["):
             with st.chat_message("user", avatar="👤"):
-                st.markdown(r["answer"])
+                st.markdown(ans)
 
     # Thinking indicator — shown while AI generates
     thinking_ph = st.empty()
