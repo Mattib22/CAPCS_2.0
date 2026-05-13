@@ -927,7 +927,8 @@ elif st.session_state.phase == "generating":
                     cd["decision"], cd["options"], cd.get("leaning", ""),
                     cd["confidence_before"], enriched_profile_str,
                     history_text, cd.get("last_answer", ""), context, longitudinal_text,
-                    turn_num=listening_answers + 1
+                    turn_num=listening_answers + 1,
+                    loop_context=cd.get("loop_context", "")
                 )
             cd["conversation_message"] = message
             cd["bias_text"] = ""
@@ -1220,12 +1221,18 @@ elif st.session_state.phase == "challenge":
             rejected = cd.get("rejected_biases", [])
             if bias_name_short not in rejected:
                 rejected.append(bias_name_short)
+            loop_ctx = (
+                f"Previously tried bias: '{bias_name_short}'. "
+                f"User said it doesn't resonate. "
+                f"Explore a DIFFERENT angle — do not revisit this bias."
+            )
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
             new_cd["rejected_biases"] = rejected
             new_cd["extra_listening"] = 2
             new_cd["capcs_state"] = "listening"
+            new_cd["loop_context"] = loop_ctx
             st.session_state.current_decision = new_cd
             st.session_state.phase = "generating"
             st.rerun()
@@ -1237,6 +1244,14 @@ elif st.session_state.phase == "challenge":
         if not conversation_msg:
             st.session_state.phase = "generating"; st.rerun()
 
+        _CONVICTION = [
+            "yes", "yes this could work", "yes, this could work",
+            "that could work", "this could work", "sounds good",
+            "that makes sense", "i think so", "definitely", "absolutely",
+            "i like this", "that works", "this works", "great idea", "good idea",
+            "i agree", "that resonates", "i'm convinced", "that's it",
+        ]
+
         st.markdown("")
         col1, col2 = st.columns(2)
         with col1:
@@ -1245,15 +1260,19 @@ elif st.session_state.phase == "challenge":
         with col2:
             ca_no = st.button("No, this doesn't work for me", key=f"ca_no_{round_num}",
                               use_container_width=True)
+        ca_typed = st.chat_input("Or respond in your own words…", key=f"ca_text_{round_num}")
 
-        if ca_yes:
-            # Ensure the accepted CAPCS option is in the options list for conviction
+        # Detect conviction from button OR typed phrase
+        typed_convinced = ca_typed and any(p in ca_typed.lower() for p in _CONVICTION)
+        is_convinced = ca_yes or typed_convinced
+        is_rejected  = ca_no  or (ca_typed and not typed_convinced)
+
+        def _go_conviction(user_text):
             accepted_option = cd.get("perspective_text", "")
             if accepted_option and accepted_option not in st.session_state.all_options:
                 st.session_state.all_options.append(accepted_option)
-
             conv_hist = cd.get("conversation_history", [])
-            conv_hist.append({"role": "user", "content": "Yes, this could work"})
+            conv_hist.append({"role": "user", "content": user_text})
             new_round = cd.get("rounds", 0) + 1
             rounds_log = cd.get("rounds_log", [])
             rounds_log.append({
@@ -1264,7 +1283,7 @@ elif st.session_state.phase == "challenge":
                 "perspective": cd.get("perspective_text", ""),
                 "question": cd.get("question_text", ""),
                 "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": "Yes, this could work",
+                "followups": [], "answer": user_text,
                 "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
                 "answer_key_signal": "", "shifted": True, "still_undecided": False,
                 "how_shifted": "", "leaning": accepted_option or cd.get("leaning", ""),
@@ -1278,9 +1297,14 @@ elif st.session_state.phase == "challenge":
             st.session_state.current_decision = new_cd
             st.rerun()
 
-        if ca_no:
+        if is_convinced:
+            _go_conviction(ca_typed if typed_convinced else "Yes, this could work")
+
+        if is_rejected:
             new_cd = dict(cd)
             new_cd["capcs_state"] = "counterattack_rejected"
+            if ca_typed:
+                new_cd["_rejection_context"] = ca_typed
             st.session_state.current_decision = new_cd
             st.rerun()
 
@@ -1295,14 +1319,19 @@ elif st.session_state.phase == "challenge":
         why_not = st.chat_input("What doesn't work?", key=f"ca_reject_{round_num}")
         if why_not and why_not.strip():
             answer = why_not.strip()
+            bias_tried   = cd.get("bias_text", "").split("—")[0].strip()[:60]
+            perspective  = cd.get("perspective_text", "")
             conv_hist = cd.get("conversation_history", [])
             conv_hist.append({"role": "user", "content": answer})
             new_round = cd.get("rounds", 0) + 1
             rounds_log = cd.get("rounds_log", [])
             rejected_opts = cd.get("rejected_options", [])
-            perspective = cd.get("perspective_text", "")
+            rejected_biases = cd.get("rejected_biases", [])
             if perspective and perspective not in rejected_opts:
                 rejected_opts.append(perspective)
+            # Keep the bias in rejected_biases so spark doesn't re-use it
+            if bias_tried and bias_tried not in rejected_biases:
+                rejected_biases.append(bias_tried)
             rounds_log.append({
                 "round": new_round, "round_number": new_round,
                 "round_state": "counterattack_rejected",
@@ -1316,6 +1345,12 @@ elif st.session_state.phase == "challenge":
                 "how_shifted": "", "leaning": cd.get("leaning", ""),
                 "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
             })
+            loop_ctx = (
+                f"Previously tried bias: '{bias_tried}'. "
+                f"Option proposed: '{perspective}'. "
+                f"User said it doesn't work because: '{answer}'. "
+                f"Explore a DIFFERENT angle — do not revisit this bias or option."
+            )
             st.session_state.current_decision = {
                 "decision": cd["decision"],
                 "decision_short": cd.get("decision_short", ""),
@@ -1333,9 +1368,10 @@ elif st.session_state.phase == "challenge":
                 "capcs_state": "listening",
                 "listening_answers": cd.get("listening_answers", 0),
                 "extra_listening": 2,
-                "rejected_biases": cd.get("rejected_biases", []),
+                "rejected_biases": rejected_biases,
                 "rejected_options": rejected_opts,
                 "confirmed_bias": "",
+                "loop_context": loop_ctx,
                 "answer_signals": {},
             }
             st.session_state.phase = "generating"
@@ -1491,15 +1527,32 @@ elif st.session_state.phase == "challenge":
                 with col1:
                     if st.button("Explore further", key=f"conv_explore_{round_num}",
                                  use_container_width=True):
-                        # Clear conviction state and loop back to listening
                         st.session_state["_what_shifted"] = ""
                         st.session_state["_final_choice"] = ""
                         st.session_state["_confidence_after"] = None
                         st.session_state["_confidence_confirmed"] = False
+                        # Add confirmed bias + accepted option to rejected lists
+                        confirmed = cd.get("confirmed_bias", "")
+                        perspective = cd.get("perspective_text", "")
+                        rej_biases = list(cd.get("rejected_biases", []))
+                        rej_opts   = list(cd.get("rejected_options", []))
+                        if confirmed and confirmed not in rej_biases:
+                            rej_biases.append(confirmed)
+                        if perspective and perspective not in rej_opts:
+                            rej_opts.append(perspective)
+                        loop_ctx = (
+                            f"Previously tried bias: '{confirmed}'. "
+                            f"Option proposed: '{perspective}'. "
+                            f"User explored this but confidence was only {conf}% — not enough. "
+                            f"Explore a DIFFERENT angle — do not revisit this bias or option."
+                        )
                         new_cd = dict(cd)
                         new_cd["capcs_state"] = "listening"
                         new_cd["extra_listening"] = 2
                         new_cd["confirmed_bias"] = ""
+                        new_cd["rejected_biases"] = rej_biases
+                        new_cd["rejected_options"] = rej_opts
+                        new_cd["loop_context"] = loop_ctx
                         st.session_state.current_decision = new_cd
                         st.session_state.phase = "generating"
                         st.rerun()

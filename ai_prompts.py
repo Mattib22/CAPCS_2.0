@@ -92,7 +92,8 @@ PROFILE:
 
 
 def get_probing_question(decision, options, leaning, confidence, profile_str,
-                          history, last_answer, context, longitudinal="", turn_num=2):
+                          history, last_answer, context, longitudinal="", turn_num=2,
+                          loop_context=""):
     """
     Turns 2 through PROBE_TURNS: pure Socratic probing — understand the user's thinking.
     No bias named. Forms hypothesis internally but says nothing.
@@ -124,6 +125,7 @@ Rules:
 - Do NOT ask about facts, logistics, or activities
 - Warm, direct, curious — speaks to what is happening inside them, not around them
 
+{f"IMPORTANT — THIS IS A SECOND PASS THROUGH THE CONVERSATION:{chr(10)}{loop_context}{chr(10)}Ask questions that open a genuinely different angle from what was already tried.{chr(10)}" if loop_context else ""}
 CONVERSATION HISTORY:
 {history}
 
