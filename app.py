@@ -941,18 +941,36 @@ elif st.session_state.phase == "generating":
             )
             fields = extract_spark_fields(spark_response)
             message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
-            cd["conversation_message"] = message
-            cd["bias_text"] = fields["bias_name"]
-            cd["explanation_text"] = fields["bias_explanation"]
-            cd["perspective_option"] = ""
-            cd["perspective_text"] = ""
-            cd["question_text"] = ""
-            cd.setdefault("conversation_history", []).append({
-                "role": "assistant", "content": message,
-                "state": "spark", "bias_name": fields["bias_name"],
-                "bias_explanation": fields["bias_explanation"],
-            })
-            st.session_state.current_decision = cd
+            bias_name = fields["bias_name"]
+
+            if not message:
+                # API returned nothing — drop back to listening for one more question
+                cd["capcs_state"] = "listening"
+                cd["extra_listening"] = 1
+                cd["conversation_message"] = ""
+                st.session_state.current_decision = cd
+            else:
+                # If message came back but structured fields weren't parsed, try inline extract
+                if not bias_name:
+                    import re as _re
+                    _m = _re.search(
+                        r'(?:called|is called|known as)\s+([A-Z][A-Za-z ]{2,50}?)(?:[.,]|$)',
+                        message
+                    )
+                    bias_name = _m.group(1).strip() if _m else ""
+
+                cd["conversation_message"] = message
+                cd["bias_text"] = bias_name
+                cd["explanation_text"] = fields["bias_explanation"]
+                cd["perspective_option"] = ""
+                cd["perspective_text"] = ""
+                cd["question_text"] = ""
+                cd.setdefault("conversation_history", []).append({
+                    "role": "assistant", "content": message,
+                    "state": "spark", "bias_name": bias_name,
+                    "bias_explanation": fields["bias_explanation"],
+                })
+                st.session_state.current_decision = cd
 
         elif capcs_state == "counterattack":
             confirmed_bias = cd.get("confirmed_bias", "")
@@ -1123,7 +1141,8 @@ elif st.session_state.phase == "challenge":
     # ══════════════════════════════════════════════════════════════════════════
     elif capcs_state == "spark":
         bias_name_short = cd.get("bias_text", "").split("—")[0].strip()[:60]
-        if not bias_name_short:
+        # Only re-generate if the message itself is missing — not just the bias name
+        if not conversation_msg:
             st.session_state.phase = "generating"; st.rerun()
 
         uk = user_key_corr
