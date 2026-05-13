@@ -600,32 +600,46 @@ Write 2-3 sentences, MAXIMUM 60 WORDS TOTAL (count strictly):
 Do NOT introduce any option. Do NOT ask a question. Do NOT offer advice.
 Write in second person, speaking directly to the user ("you", "your"). Never refer to the user in the third person ("the user", "they", "their"). Never start a sentence with "The user" or "You said".{rejected_note}
 
-Then output on a new line:
+Then output these two lines with no markdown formatting — plain text only, exactly as shown:
 BIAS_NAME: [bias name only, max 6 words]
 BIAS_EXPLANATION: [one plain English sentence, max 25 words]
 
 CONTEXT: {context}
 PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 1200)
+    return ask_ai(prompt, 4096)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
     """Parse BIAS_NAME and BIAS_EXPLANATION from get_spark_message output.
-    Robust to markdown bold markers, underscores vs spaces, and casing."""
+    Regex-based: handles any markdown wrapping (bold, italic, underscores, dashes).
+    The narrative message is everything before the first structured field line."""
+    import re as _re
     result = {"spark_message": "", "bias_name": "", "bias_explanation": ""}
-    message_lines = []
-    for raw_line in spark_response.strip().split("\n"):
-        # Normalize: strip markdown bold/italic markers and leading punctuation
-        line = raw_line.strip().strip("*").strip("_").strip("-").strip()
-        line_upper = line.upper()
-        if line_upper.startswith("BIAS_NAME:") or line_upper.startswith("BIAS NAME:"):
-            result["bias_name"] = line.split(":", 1)[-1].strip().strip("*").strip("_").strip()
-        elif line_upper.startswith("BIAS_EXPLANATION:") or line_upper.startswith("BIAS EXPLANATION:"):
-            result["bias_explanation"] = line.split(":", 1)[-1].strip().strip("*").strip("_").strip()
-        else:
-            message_lines.append(raw_line)
-    result["spark_message"] = "\n".join(l for l in message_lines if l.strip()).strip()
+
+    # Match BIAS_NAME in any markdown form: **BIAS_NAME**: X  |  BIAS_NAME: X  |  BIAS NAME: X
+    _KEY = r'[\*\_\-\s]*BIAS[\s_]?{key}[\*\_\s]*:[\*\_\s]*(.+)'
+    name_m = _re.search(_KEY.format(key="NAME"), spark_response, _re.IGNORECASE)
+    exp_m  = _re.search(_KEY.format(key="EXPLANATION"), spark_response, _re.IGNORECASE)
+
+    if name_m:
+        result["bias_name"] = name_m.group(1).strip().strip("*").strip("_").strip()
+    if exp_m:
+        result["bias_explanation"] = exp_m.group(1).strip().strip("*").strip("_").strip()
+
+    # Narrative = everything before whichever structured field comes first
+    cutoff = len(spark_response)
+    for m in [name_m, exp_m]:
+        if m:
+            # Walk back to the start of that line
+            line_start = spark_response.rfind("\n", 0, m.start())
+            cutoff = min(cutoff, line_start if line_start != -1 else m.start())
+
+    narrative = spark_response[:cutoff].strip()
+    # Strip any trailing separator lines (--- or ***)
+    narrative = _re.sub(r'\n[-\*—]{2,}\s*$', '', narrative).strip()
+    result["spark_message"] = narrative
+
     return result
 
 
