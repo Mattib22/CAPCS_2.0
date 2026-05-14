@@ -53,33 +53,41 @@ def get_opening_question(decision, options, confidence, profile_str, context, lo
         "leaning one way" if confidence < 80 else
         "fairly settled"
     )
-    prompt = f"""You are a thinking partner helping someone work through a real decision.
+prompt = f"""You are a psychologist helping someone understand their own thinking around a decision.
 
-Your hidden goal: form a hypothesis about which cognitive bias — from the full range of known cognitive biases — is most active in this person's thinking. You are a diagnostician. You do not reveal this goal. You ask questions that feel natural and curious, but each one is specifically designed to surface or rule out a bias hypothesis.
+Read the decision, both options, the user's leaning, their profile, context, and the full conversation history carefully.
 
-Your job this turn: make ONE specific observation about what they shared, then ask ONE diagnostic question.
+Determine which question number this is based on how many USER messages appear in the conversation history:
+- 0 user messages = Question 1
+- 1 user message = Question 2  
+- 2 user messages = Question 3
 
-How to choose your question:
-- Read what they said carefully. Notice: what reasoning pattern is emerging? What are they taking for granted? What are they not saying?
-- Form a hypothesis about the most likely active bias — draw on the full range of cognitive biases you know (there are over 100).
-- Ask the question that would give you the clearest evidence for or against that specific hypothesis. The question should be one that only makes sense to ask if you are probing that particular bias — not a generic question that could apply to anything.
+QUESTION 1 — Target: what the user wants and values
+Read the profile carefully. Identify which profile element creates the most relevant 
+tension or incongruity with this specific decision — not just any profile fact, but 
+the one that makes the decision feel more complicated or more meaningful. 
 
-Examples of diagnostic questions (the bias being probed is shown in brackets — do NOT say it aloud):
-- "What would change for you if you'd only been here two weeks instead of five months?" [sunk cost]
-- "When you imagine choosing to go back — what's the first feeling that comes up?" [anticipated regret / loss aversion]
-- "Is there a version of yourself that this decision would disappoint?" [identity-protective cognition]
-- "What are you most afraid people will think if you go back now?" [social projection / fear of judgment]
-- "What would staying look like if no one you knew was watching?" [conformity bias]
-- "When you say you 'have to' keep travelling — what does that obligation feel like?" [obligation framing / internalized expectation]
-- "Is there a third option you haven't mentioned because it felt too unrealistic?" [false dichotomy]
-- "What information would you need to feel certain — and why don't you have it yet?" [ambiguity aversion]
+Frame the question by: (1) acknowledging both options briefly, (2) citing that specific 
+profile element, (3) asking what the most emotionally loaded word or concept in their 
+decision means to them personally right now, and ground it in time with a phrase.
 
-Rules:
-- One observation + one question only. Max 60 words total.
-- Do NOT ask about facts, logistics, or activities
-- Do NOT name any bias, pattern, or psychological concept
-- If they used "have to", "should", "can't", or "need to" — probe that specific word
-- Warm, direct, second person ("you", "your")
+Example: "You're weighing X against Y, especially given [profile element that creates 
+tension]. What does '[loaded word]' truly mean to you at this point in your life?"
+
+QUESTION 2 — Target: what the user fears or is protecting
+Read their first answer carefully. Find what they said they want. Ask what makes the other option feel threatening to that — or what they fear would happen if they chose differently.
+Structure: build directly on their exact words. "You said [their exact words]. What makes [other option] feel like it threatens that?" or "What specifically worries you about [other option]?"
+
+QUESTION 3 — Target: what the user is assuming or treating as fixed
+Read their second answer carefully. Find the assumption or constraint embedded in what they said. Ask whether that constraint is a fact about their situation or a belief about what's possible.
+Structure: "You said [their exact words about the constraint]. Is that a fact about your situation right now, or a belief about what's possible?" or "What would need to be true for [their assumption] not to apply here?"
+
+Rules for ALL questions:
+- One question only. Never two questions in one message.
+- Never ask about tasks, activities, logistics, or external facts
+- Never ask "what does X involve?" — ask "what does X mean to you?" or "what would X give you?"
+- Always use the user's exact words in your framing — do not paraphrase
+- Second person, warm, conversational, max 50 words
 - End with exactly one question mark
 
 DECISION: {decision}
@@ -87,7 +95,9 @@ OPTIONS: {options}
 CONFIDENCE: {confidence}% ({confidence_label})
 CONTEXT: {context}
 PROFILE:
-{profile_str}{long_section}"""
+{profile_str}
+CONVERSATION HISTORY (use this to determine question number and build on previous answers):
+{history}{long_section}"""
     return ask_ai(prompt, 1500)
 
 
@@ -569,47 +579,77 @@ Answer YES or NO only. Nothing else."""
     return result.strip().upper().startswith("YES")
 
 
-def get_spark_message(conversation_history: list, profile_str: str, context: str,
-                      rejected_biases: list = None) -> str:
+def get_spark_message(conversation_history: list, profile_str: str, context: str, 
+                       rejected_biases: list = []) -> str:
     """
-    State: spark. Names and explains the bias. No option. No question. Max 60 words.
-    Returns the narrative followed by:
-    BIAS_NAME: [bias name only, max 6 words]
-    BIAS_EXPLANATION: [one plain English sentence]
+    Spark turn. Names the bias earned from the full conversation.
+    Returns the spark message + structured BIAS_NAME/BIAS_EXPLANATION fields.
+    If insufficient signal, returns SIGNAL_INSUFFICIENT.
     """
     history_text = "\n".join([
         f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
+    
     rejected_note = ""
     if rejected_biases:
-        rejected_note = (
-            f"\nThe following biases were already tried and the user said they don't "
-            f"resonate — do not use them: {', '.join(rejected_biases)}."
-        )
+        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}"
+    
+    prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
 
-    prompt = f"""Read the full conversation below carefully.
+Read the full conversation carefully. Identify which of the three dimensions showed the strongest distortion:
+- DIMENSION 1 (wants/values): Is the user valuing something that doesn't serve their future self?
+- DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
+- DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
+Then select ONE bias from the list below that best explains the pattern across the FULL conversation — not just the last message.
+{rejected_note}
+
+DIMENSION 1 — distortions in what they want:
+- Sunk Cost Fallacy: persisting because of past investment, not future value
+- Idealization Bias: the unchosen option looks unrealistically perfect from a distance
+- Projection Bias: assuming future self will want what present self wants now
+- Overconfidence Bias: overestimating how settled or correct their current view is
+- Halo Effect: one attractive feature of an option colours the entire evaluation
+
+DIMENSION 2 — distortions in what they fear:
+- Anticipated Regret: driven by avoiding a future negative feeling, not present reality
+- Loss Aversion: fear of losing outweighs equivalent potential gain
+- Status Quo Bias: preferring current state because change feels inherently risky
+- Omission Bias: believing inaction is safer or more moral than action
+
+DIMENSION 3 — distortions in what they assume:
+- False Dichotomy: treating two options as exhaustive when more exist
+- Overgeneralization: applying one specific experience as a universal rule
+- Constraint Fixation: treating a changeable constraint as if it is fixed
+- Availability Heuristic: overweighting vivid or recent examples when judging likelihood
+- Confirmation Bias: seeking evidence that confirms existing beliefs, ignoring the rest
+- Anchoring Bias: over-relying on one reference point for all subsequent judgment
+- Social Proof Bias: deciding based on what others are doing, not personal values
+
+If no bias from this list is clearly earned from the conversation, respond with exactly:
+SIGNAL_INSUFFICIENT
+
+Otherwise write a spark message of 2-3 sentences (max 60 words) that:
+1. Reflects something specific the user said using their exact words
+2. Names the bias naturally mid-sentence as a revelation: "that feeling of X is called Y"
+3. Explains in one sentence what this bias is doing to their thinking right now
+
+Do NOT introduce any option. Do NOT ask a question. Write in second person only.
+Never write "The user" or refer to the user in third person.
+
+Then on a new line output:
+BIAS_NAME: [bias name only — max 6 words]
+BIAS_EXPLANATION: [one plain English sentence — what this bias is]
+
+FULL CONVERSATION:
 {history_text}
-
-Identify the single most specific cognitive bias active in this person's thinking — not a generic one, a specific one earned from what they said across ALL their answers. Use patterns across multiple responses, not just the last one.
-
-Write 2-3 sentences, MAXIMUM 60 WORDS TOTAL (count strictly):
-1. Reflect something specific the user said, using their own words
-2. Name the bias naturally mid-sentence as a revelation, not a label: "that feeling of X is called Y"
-3. Explain in plain English what this bias is doing to their thinking
-
-Do NOT introduce any option. Do NOT ask a question. Do NOT offer advice.
-Write in second person, speaking directly to the user ("you", "your"). Never refer to the user in the third person ("the user", "they", "their"). Never start a sentence with "The user" or "You said".{rejected_note}
-
-Then output these two lines with no markdown formatting — plain text only, exactly as shown:
-BIAS_NAME: [bias name only, max 6 words]
-BIAS_EXPLANATION: [one plain English sentence, max 25 words]
 
 CONTEXT: {context}
 PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 4096)
+    
+    return ask_ai(prompt, 4019)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
