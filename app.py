@@ -916,19 +916,22 @@ elif st.session_state.phase == "generating":
         listening_answers = cd.get("listening_answers", 0)
 
         if capcs_state == "listening":
-            if listening_answers == 0:
-                message = get_opening_question(
-                    cd["decision"], cd["options"],
-                    cd["confidence_before"], enriched_profile_str,
-                    context, longitudinal_text
-                )
-            else:
+            if cd.get("extra_listening", 0) > 0:
+                # Loop-back turn: use probing question with loop context
                 message = get_probing_question(
                     cd["decision"], cd["options"], cd.get("leaning", ""),
                     cd["confidence_before"], enriched_profile_str,
                     history_text, cd.get("last_answer", ""), context, longitudinal_text,
                     turn_num=listening_answers + 1,
                     loop_context=cd.get("loop_context", "")
+                )
+            else:
+                # Initial Q1/Q2/Q3: opening question determines which to ask via history
+                message = get_opening_question(
+                    cd["decision"], cd["options"],
+                    cd["confidence_before"], enriched_profile_str,
+                    context, longitudinal_text,
+                    history=history_text
                 )
             cd["conversation_message"] = message
             cd["bias_text"] = ""
@@ -950,8 +953,8 @@ elif st.session_state.phase == "generating":
             message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
             bias_name = fields["bias_name"]
 
-            if not message:
-                # API returned nothing — drop back to listening for one more question
+            if not message or "SIGNAL_INSUFFICIENT" in spark_response:
+                # Insufficient signal — drop back to listening for one more question
                 cd["capcs_state"] = "listening"
                 cd["extra_listening"] = 1
                 cd["conversation_message"] = ""

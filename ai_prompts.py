@@ -40,10 +40,11 @@ def ask_ai(prompt, max_tokens=1200):
 
 # ── NEW CONVERSATIONAL AI FUNCTIONS ────────────────────────────────────────────
 
-def get_opening_question(decision, options, confidence, profile_str, context, longitudinal=""):
+def get_opening_question(decision, options, confidence, profile_str, context,
+                          longitudinal="", history=""):
     """
-    Turn 1 only. Pure listening. One warm observation + one open question.
-    No bias named. No labels. Forms hypothesis internally but says nothing.
+    Listening phase Q1–Q3. Determines which question to ask based on the
+    number of USER messages already in the conversation history.
     """
     long_section = f"\n{longitudinal}" if longitudinal else ""
     confidence_label = (
@@ -53,25 +54,25 @@ def get_opening_question(decision, options, confidence, profile_str, context, lo
         "leaning one way" if confidence < 80 else
         "fairly settled"
     )
-prompt = f"""You are a psychologist helping someone understand their own thinking around a decision.
+    prompt = f"""You are a psychologist helping someone understand their own thinking around a decision.
 
 Read the decision, both options, the user's leaning, their profile, context, and the full conversation history carefully.
 
 Determine which question number this is based on how many USER messages appear in the conversation history:
 - 0 user messages = Question 1
-- 1 user message = Question 2  
+- 1 user message = Question 2
 - 2 user messages = Question 3
 
 QUESTION 1 — Target: what the user wants and values
-Read the profile carefully. Identify which profile element creates the most relevant 
-tension or incongruity with this specific decision — not just any profile fact, but 
-the one that makes the decision feel more complicated or more meaningful. 
+Read the profile carefully. Identify which profile element creates the most relevant
+tension or incongruity with this specific decision — not just any profile fact, but
+the one that makes the decision feel more complicated or more meaningful.
 
-Frame the question by: (1) acknowledging both options briefly, (2) citing that specific 
-profile element, (3) asking what the most emotionally loaded word or concept in their 
+Frame the question by: (1) acknowledging both options briefly, (2) citing that specific
+profile element, (3) asking what the most emotionally loaded word or concept in their
 decision means to them personally right now, and ground it in time with a phrase.
 
-Example: "You're weighing X against Y, especially given [profile element that creates 
+Example: "You're weighing X against Y, especially given [profile element that creates
 tension]. What does '[loaded word]' truly mean to you at this point in your life?"
 
 QUESTION 2 — Target: what the user fears or is protecting
@@ -579,8 +580,13 @@ Answer YES or NO only. Nothing else."""
     return result.strip().upper().startswith("YES")
 
 
+<<<<<<< HEAD
 def get_spark_message(conversation_history: list, profile_str: str, context: str, 
                        rejected_biases: list = []) -> str:
+=======
+def get_spark_message(conversation_history: list, profile_str: str, context: str,
+                      rejected_biases: list = []) -> str:
+>>>>>>> d4904c0 (Redesign listening and spark prompts)
     """
     Spark turn. Names the bias earned from the full conversation.
     Returns the spark message + structured BIAS_NAME/BIAS_EXPLANATION fields.
@@ -590,6 +596,7 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
         f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
+<<<<<<< HEAD
     
     rejected_note = ""
     if rejected_biases:
@@ -602,6 +609,20 @@ Read the full conversation carefully. Identify which of the three dimensions sho
 - DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
 - DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
+=======
+
+    rejected_note = ""
+    if rejected_biases:
+        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}"
+
+    prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
+
+Read the full conversation carefully. Identify which of the three dimensions showed the strongest distortion:
+- DIMENSION 1 (wants/values): Is the user valuing something that doesn't serve their future self?
+- DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
+- DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
+
+>>>>>>> d4904c0 (Redesign listening and spark prompts)
 Then select ONE bias from the list below that best explains the pattern across the FULL conversation — not just the last message.
 {rejected_note}
 
@@ -648,8 +669,13 @@ FULL CONVERSATION:
 CONTEXT: {context}
 PROFILE:
 {profile_str}"""
+<<<<<<< HEAD
     
     return ask_ai(prompt, 4019)
+=======
+
+    return ask_ai(prompt, 512)
+>>>>>>> d4904c0 (Redesign listening and spark prompts)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
