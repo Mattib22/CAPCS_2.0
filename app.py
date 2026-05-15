@@ -26,6 +26,30 @@ from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
                          navigate_to, scroll_to_top, scroll_to_chat_bottom,
                          inject_keepalive, split_options)
 
+CAPCS_DIMENSIONS = """
+DIMENSION 1 — Distortions in what the user wants and values:
+- Sunk Cost Fallacy: persisting because of past investment, not future value
+- Idealization Bias: the unchosen option looks unrealistically perfect from a distance
+- Projection Bias: assuming future self will want what present self wants now
+- Overconfidence Bias: overestimating how settled or correct their current view is
+- Halo Effect: one attractive feature of an option colours the entire evaluation
+
+DIMENSION 2 — Distortions in what the user fears or wants to protect:
+- Anticipated Regret: driven by avoiding a future negative feeling, not present reality
+- Loss Aversion: fear of losing outweighs equivalent potential gain
+- Status Quo Bias: preferring current state because change feels inherently risky
+- Omission Bias: believing inaction is safer or more moral than action
+
+DIMENSION 3 — Distortions in what the user assumes:
+- False Dichotomy: treating two options as exhaustive when more exist
+- Overgeneralization: applying one specific experience as a universal rule
+- Constraint Fixation: treating a changeable constraint as if it is fixed and immovable
+- Availability Heuristic: overweighting vivid or recent examples when judging likelihood
+- Confirmation Bias: seeking evidence that confirms existing beliefs, ignoring the rest
+- Anchoring Bias: over-relying on one reference point for all subsequent judgment
+- Social Proof Bias: deciding based on what others are doing, not on personal values
+"""
+
 # ── PAGE CONFIG ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="CAPCS — Cognitive Decision Assistant", page_icon="⚡", layout="centered")
 

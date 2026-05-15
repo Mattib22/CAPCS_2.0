@@ -7,6 +7,31 @@ import json
 import re
 
 
+CAPCS_DIMENSIONS = """
+DIMENSION 1 — Distortions in what the user wants and values:
+- Sunk Cost Fallacy: persisting because of past investment, not future value
+- Idealization Bias: the unchosen option looks unrealistically perfect from a distance
+- Projection Bias: assuming future self will want what present self wants now
+- Overconfidence Bias: overestimating how settled or correct their current view is
+- Halo Effect: one attractive feature of an option colours the entire evaluation
+
+DIMENSION 2 — Distortions in what the user fears or wants to protect:
+- Anticipated Regret: driven by avoiding a future negative feeling, not present reality
+- Loss Aversion: fear of losing outweighs equivalent potential gain
+- Status Quo Bias: preferring current state because change feels inherently risky
+- Omission Bias: believing inaction is safer or more moral than action
+
+DIMENSION 3 — Distortions in what the user assumes:
+- False Dichotomy: treating two options as exhaustive when more exist
+- Overgeneralization: applying one specific experience as a universal rule
+- Constraint Fixation: treating a changeable constraint as if it is fixed and immovable
+- Availability Heuristic: overweighting vivid or recent examples when judging likelihood
+- Confirmation Bias: seeking evidence that confirms existing beliefs, ignoring the rest
+- Anchoring Bias: over-relying on one reference point for all subsequent judgment
+- Social Proof Bias: deciding based on what others are doing, not on personal values
+"""
+
+
 def _get_api_key():
     try:
         return st.secrets["GEMINI_API_KEY"]
@@ -43,8 +68,10 @@ def ask_ai(prompt, max_tokens=1200):
 def get_opening_question(decision, options, confidence, profile_str, context,
                           longitudinal="", history=""):
     """
-    Listening phase Q1–Q3. Determines which question to ask based on the
-    number of USER messages already in the conversation history.
+    Engineered three-question structure targeting the three bias dimensions.
+    Q1: Dimension 1 — wants/values
+    Q2: Dimension 2 — fears/losses
+    Q3: Dimension 3 — assumptions
     """
     long_section = f"\n{longitudinal}" if longitudinal else ""
     confidence_label = (
@@ -56,7 +83,7 @@ def get_opening_question(decision, options, confidence, profile_str, context,
     )
     prompt = f"""You are having a real conversation with someone about an important decision in their life. You are warm, perceptive, and psychologically minded — like a trusted friend who also understands how people think.
 
-Your job is to ask ONE question. The goal of each question is specific depending on where you are in the conversation. Count the USER messages in the conversation history to know which question to ask:
+Your job is to ask ONE question. Count the USER messages in the conversation history to know which question to ask:
 
 0 user messages → ask Question 1
 1 user message → ask Question 2
@@ -64,11 +91,11 @@ Your job is to ask ONE question. The goal of each question is specific depending
 
 ---
 
-QUESTION 1 — Find out what the user truly wants and values
+QUESTION 1 — Dimension 1: surface what the user truly wants and values
 
-Read the profile carefully. Find the one or two profile elements that together create real friction or incongruity with this specific decision. Friction means something that makes the decision more complicated or meaningful — for example, a qualification that contrasts with current work (a Masters degree while working in hospitality — both together create the tension, not just one alone), or a stated value that conflicts with the option they're leaning towards. Do not pick generic profile facts like passions or interests unless they directly conflict with one of the options. Pick the elements that create genuine tension with THIS specific decision.
+Read the profile carefully. Find the one or two profile elements that together create real friction or incongruity with this specific decision. Friction means something that makes the decision more complicated or meaningful — for example, a qualification that contrasts with current work (a Masters degree while working in hospitality — both together create the tension, not just one alone), or a stated value that conflicts with the option they are leaning towards. Do not pick generic facts like hobbies unless they directly conflict with one of the options.
 
-Then write a short, warm message that:
+Write a short, warm message that:
 - Names both options naturally in one sentence
 - Weaves in the profile element(s) that create friction
 - Asks what the most emotionally loaded word or concept in their decision truly means to them personally, grounded in time ("at this point in your life" or "right now")
@@ -76,25 +103,33 @@ Then write a short, warm message that:
 Gold standard example:
 "You're weighing continuing your travels in Australia against the idea of returning to Europe to settle, especially with your background in Cognitive Science and your current work in hospitality. What does 'settle' truly mean to you at this point in your life?"
 
-Why this works: both options named naturally, two profile elements that together create tension (degree + current job — not just one), emotionally loaded word probed ('settle'), temporal grounding present.
+Why this works: both options named naturally, two profile elements that together create tension (degree + current job), emotionally loaded word probed ('settle'), temporal grounding present.
 
 ---
 
-QUESTION 2 — Find out what the user is afraid of losing
+QUESTION 2 — Dimension 2: surface what the user fears or wants to protect
 
-Read their first answer. Understand what matters to them — what they said they want or value. Then ask what the option they are leaning TOWARDS would actually cost them, or what it would do to the thing they just said matters most.
+Read their first answer carefully. Absorb what matters to them. Then ask a question that helps surface fear, loss, cost, or what their preferred path might threaten. You are looking for the emotional cost of the option they are leaning towards — what it would do to what they just said matters most.
 
-Speak naturally from what you understood. Do not repeat their exact words back verbatim. Do not start with "You said...". The question should feel like a friend who listened carefully and noticed a tension between what they want and the path they are choosing.
+Speak naturally from what you understood. Do not repeat their exact words back verbatim. Do not start with "You said...". The question should feel like a friend who listened and noticed a tension.
 
-Goal: surface fear, loss, or cost — what does their preferred path make harder or threaten?
+The bias taxonomy reference for this question:
+{CAPCS_DIMENSIONS}
+
+You are trying to open up territory in Dimension 2. Ask from genuine curiosity about what the preferred path costs them emotionally.
 
 ---
 
-QUESTION 3 — Surface the assumption being treated as a fixed fact
+QUESTION 3 — Dimension 3: surface the assumption being treated as a fixed fact
 
-Read their second answer. Find the belief or constraint embedded in what they said — something they are treating as an immovable wall. Ask whether that is actually a fact about their situation, or a belief about what is possible.
+Read their second answer carefully. Find the belief or constraint embedded in what they said — something they are treating as fixed and unchangeable. Ask a question that gently opens up that assumption.
 
-Speak naturally and with genuine curiosity. Not confrontational. The question should gently open up what they have closed off.
+The bias taxonomy reference for this question:
+{CAPCS_DIMENSIONS}
+
+You are trying to open up territory in Dimension 3. The question should be genuinely curious, not confrontational. Make them think, not defend themselves.
+
+Do not repeat their exact words back verbatim. Speak naturally.
 
 ---
 
@@ -115,7 +150,7 @@ PROFILE:
 {profile_str}
 CONVERSATION SO FAR:
 {history}{long_section}"""
-    return ask_ai(prompt, 1500)
+    return ask_ai(prompt, 512)
 
 
 def get_probing_question(decision, options, leaning, confidence, profile_str,
@@ -597,12 +632,15 @@ Answer YES or NO only. Nothing else."""
 
 
 def get_spark_message(conversation_history: list, profile_str: str, context: str,
-                      rejected_biases: list = []) -> str:
+                      rejected_biases: list = None) -> str:
     """
     Spark turn. Names the bias earned from the full conversation.
-    Returns the spark message + structured BIAS_NAME/BIAS_EXPLANATION fields.
-    If insufficient signal, returns SIGNAL_INSUFFICIENT.
+    Returns spark message + BIAS_NAME/BIAS_EXPLANATION fields.
+    Returns 'SIGNAL_INSUFFICIENT' if no bias is clearly earned.
     """
+    if rejected_biases is None:
+        rejected_biases = []
+
     history_text = "\n".join([
         f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
@@ -610,7 +648,7 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
 
     rejected_note = ""
     if rejected_biases:
-        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}"
+        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}\n"
 
     prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
 
@@ -620,29 +658,9 @@ Read the FULL conversation carefully — not just the last message. Identify whi
 - DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
 - DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
-Then select ONE bias from the list below that best explains the pattern across the FULL conversation.
+Then select ONE bias from the taxonomy below that best explains the pattern across the FULL conversation.
 {rejected_note}
-DIMENSION 1 — distortions in what they want:
-- Sunk Cost Fallacy: persisting because of past investment, not future value
-- Idealization Bias: the unchosen option looks unrealistically perfect from a distance
-- Projection Bias: assuming future self will want what present self wants now
-- Overconfidence Bias: overestimating how settled or correct their current view is
-- Halo Effect: one attractive feature of an option colours the entire evaluation
-
-DIMENSION 2 — distortions in what they fear:
-- Anticipated Regret: driven by avoiding a future negative feeling, not present reality
-- Loss Aversion: fear of losing outweighs equivalent potential gain
-- Status Quo Bias: preferring current state because change feels inherently risky
-- Omission Bias: believing inaction is safer or more moral than action
-
-DIMENSION 3 — distortions in what they assume:
-- False Dichotomy: treating two options as exhaustive when more exist
-- Overgeneralization: applying one specific experience as a universal rule
-- Constraint Fixation: treating a changeable constraint as if it is fixed and immovable
-- Availability Heuristic: overweighting vivid or recent examples when judging likelihood
-- Confirmation Bias: seeking evidence that confirms existing beliefs, ignoring the rest
-- Anchoring Bias: over-relying on one reference point for all subsequent judgment
-- Social Proof Bias: deciding based on what others are doing, not on personal values
+{CAPCS_DIMENSIONS}
 
 If no bias from this list is clearly earned from the full conversation, respond with exactly:
 SIGNAL_INSUFFICIENT
@@ -667,7 +685,7 @@ CONTEXT: {context}
 PROFILE:
 {profile_str}"""
 
-    return ask_ai(prompt, 2048)
+    return ask_ai(prompt, 4000)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
