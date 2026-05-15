@@ -322,29 +322,16 @@ if not st.session_state.get("user_key"):
 
     if st.session_state.get("show_bias_explainer", False):
         st.markdown("")
-        st.markdown(
-            """
-<div style="
-    border-left: 4px solid #9A7B3A;
-    background: #FDFBF7;
-    padding: 18px 22px;
-    border-radius: 6px;
-    margin: 4px 0;
-">
-<p style="margin:0 0 10px 0; font-weight:700; font-size:15px;">🧠 Cognitive bias — in plain English</p>
-<p style="margin:0 0 10px 0; font-size:14px; line-height:1.6;">
-Your brain doesn't evaluate every decision from scratch. It uses <strong>mental shortcuts</strong> built from past experience — fast, automatic, mostly invisible.
-</p>
-<p style="margin:0 0 10px 0; font-size:14px; line-height:1.6;">
-In routine situations these shortcuts save time. In <strong>complex or emotionally loaded decisions</strong> — the ones that actually matter — they pull your thinking away from reality in predictable ways.
-</p>
-<p style="margin:0; font-size:14px; line-height:1.6;">
-The problem: <strong>they feel like clear reasoning.</strong> You don't notice them. That's what makes them so hard to correct on your own — and why an outside perspective changes everything.
-</p>
-</div>
-""",
-            unsafe_allow_html=True
-        )
+        bc1, bc2, bc3 = st.columns(3)
+        with bc1:
+            st.markdown("**⚡ What it is**")
+            st.caption("A mental shortcut the brain uses to decide quickly — fast, automatic, and mostly invisible to the person using it.")
+        with bc2:
+            st.markdown("**🎯 When it distorts**")
+            st.caption("In complex or emotionally loaded decisions, these shortcuts pull your thinking away from reality in predictable ways.")
+        with bc3:
+            st.markdown("**👁 Why you can't see it**")
+            st.caption("It feels like clear reasoning. You experience the bias as logic — which is exactly what makes it so hard to correct alone.")
 
     st.divider()
 
