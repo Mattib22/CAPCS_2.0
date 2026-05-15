@@ -385,18 +385,18 @@ if not st.session_state.get("user_key"):
     with tab_return:
         st.markdown("**Welcome back.** Enter the same username and PIN you used before to recover your session history.")
         st.markdown("")
-        ret_username = st.text_input(
-            "Username",
-            placeholder="Your username",
-            key="ret_username"
-        )
-        ret_pin = st.text_input(
-            "PIN",
-            placeholder="Your PIN",
-            type="password",
-            key="ret_pin"
-        )
-        if st.button("→ Recover my session", key="recover_session_btn", type="primary", use_container_width=True):
+        with st.form("recover_form"):
+            ret_username = st.text_input(
+                "Username",
+                placeholder="Your username",
+            )
+            ret_pin = st.text_input(
+                "PIN",
+                placeholder="Your PIN",
+                type="password",
+            )
+            submitted = st.form_submit_button("→ Recover my session", type="primary", use_container_width=True)
+        if submitted:
             if not ret_username.strip() or not ret_pin.strip():
                 st.error("Please enter both your username and PIN.")
             else:
