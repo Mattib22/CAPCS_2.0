@@ -1396,7 +1396,6 @@ elif st.session_state.phase == "challenge":
             st.session_state.all_options.append(_perspective)
 
         final_choice      = st.session_state.get("_final_choice", "")
-        what_shifted      = st.session_state.get("_what_shifted", "")
         confidence_stored = st.session_state.get("_confidence_after", None)
         conf_confirmed    = st.session_state.get("_confidence_confirmed", False)
 
@@ -1456,26 +1455,12 @@ elif st.session_state.phase == "challenge":
                     st.session_state["_final_choice"] = opt
                     st.rerun()
 
-        # ── Step 2 — What shifted ─────────────────────────────────────────────
-        elif not what_shifted:
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown(f"What made you land on **{final_choice}**?")
-            scroll_to_chat_bottom()
-            ws_input = st.chat_input("What shifted?", key=f"conviction_shifted_{round_num}")
-            if ws_input and ws_input.strip():
-                st.session_state["_what_shifted"] = ws_input.strip()
-                st.rerun()
-
-        # ── Step 3 — Confidence slider ────────────────────────────────────────
+        # ── Step 2 — Confidence slider ────────────────────────────────────────
         elif confidence_stored is None:
             with st.chat_message("user", avatar="👤"):
                 st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
             with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("And how clear do you feel about this now?")
+                st.markdown("How clear do you feel about this now?")
                 live_conf = st.slider(
                     "Clarity", 0, 100,
                     cd.get("confidence_before", 50), 5,
@@ -1489,12 +1474,10 @@ elif st.session_state.phase == "challenge":
                 st.session_state["_confidence_after"] = live_conf
                 st.rerun()
 
-        # ── Step 4 — Confirm confidence ───────────────────────────────────────
+        # ── Step 3 — Confirm confidence ───────────────────────────────────────
         elif not conf_confirmed:
             with st.chat_message("user", avatar="👤"):
                 st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
             with st.chat_message("assistant", avatar="🧑‍🏫"):
                 st.markdown(
                     f"You're at **{confidence_stored}% clarity** about *{final_choice}*. "
@@ -1513,19 +1496,17 @@ elif st.session_state.phase == "challenge":
                     st.session_state["_confidence_after"] = None
                     st.rerun()
 
-        # ── Step 5 — DDM threshold check ──────────────────────────────────────
+        # ── Step 4 — DDM threshold check ──────────────────────────────────────
         else:
             conf = confidence_stored
             with st.chat_message("user", avatar="👤"):
                 st.markdown(f"Going with: **{final_choice}**")
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(what_shifted)
             scroll_to_chat_bottom()
 
             if conf >= CONFIDENCE_THRESHOLD:
                 if st.button("✓ Complete session", key=f"conviction_complete_{round_num}",
                              type="primary", use_container_width=True):
-                    _save_and_close(final_choice, what_shifted, conf)
+                    _save_and_close(final_choice, "", conf)
             else:
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(
@@ -1537,7 +1518,6 @@ elif st.session_state.phase == "challenge":
                 with col1:
                     if st.button("Explore further", key=f"conv_explore_{round_num}",
                                  use_container_width=True):
-                        st.session_state["_what_shifted"] = ""
                         st.session_state["_final_choice"] = ""
                         st.session_state["_confidence_after"] = None
                         st.session_state["_confidence_confirmed"] = False
@@ -1568,7 +1548,7 @@ elif st.session_state.phase == "challenge":
                 with col2:
                     if st.button("I'm satisfied with this", key=f"conv_satisfied_{round_num}",
                                  type="primary", use_container_width=True):
-                        _save_and_close(final_choice, what_shifted, conf)
+                        _save_and_close(final_choice, "", conf)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -1711,7 +1691,6 @@ elif st.session_state.phase == "report":
             st.metric("Total shift", f"{s:+}%", delta_color="inverse")
 
         st.markdown(f"**Final decision:** {last.get('final_choice','—')}")
-        st.markdown(f"**Bias cycles completed:** {last.get('rounds_completed',0)}")
 
         # ── Conversation summary ───────────────────────────────────────────────
         rounds_log_s = last.get("rounds_log", [])
@@ -1723,11 +1702,13 @@ elif st.session_state.phase == "report":
             r.get("perspective","")
             for r in rounds_log_s if r.get("perspective") and r.get("round_state") == "counterattack"
         ))
+        bias_cycles = len(biases_found) or last.get("rounds_completed", 1)
+        st.markdown(f"**Rounds:** {bias_cycles} bias {'cycle' if bias_cycles == 1 else 'cycles'} explored")
         if biases_found or options_proposed:
             bias_str = " and ".join(biases_found) if biases_found else "a cognitive pattern"
             opt_str  = " and ".join(f'"{o}"' for o in options_proposed if o) if options_proposed else "an alternative path"
             summary_txt = (
-                f"CAPCS identified <b>{bias_str}</b> as the main pattern shaping your thinking. "
+                f"CASPER identified <b>{bias_str}</b> as the main pattern shaping your thinking. "
                 f"The session proposed {opt_str} as a way to break that pattern. "
                 f"You landed on <b>{last.get('final_choice','—')}</b> with "
                 f"<b>{last.get('confidence_final',0)}% clarity</b>."
