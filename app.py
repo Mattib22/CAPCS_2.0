@@ -1907,15 +1907,32 @@ elif st.session_state.phase == "reasoning_profile":
                 conf_shift = h.get("confidence_shift", 0) or 0
                 shift_sign = "+" if conf_shift >= 0 else ""
                 final_choice = h.get("final_choice", "—") or "—"
+                domain = h.get("domain", "")
                 rounds_log_h = h.get("rounds_log", [])
-                spark_rounds = len([r for r in rounds_log_h if r.get("round_state") == "spark"]) or h.get("rounds_completed", 0)
-                biases = [r.get("bias","").split("—")[0].strip() for r in rounds_log_h if r.get("bias")]
-                biases_unique = list(dict.fromkeys(b for b in biases if b))
+
+                # Collect spark rounds (rounds where a bias was named)
+                spark_rounds_data = [
+                    r for r in rounds_log_h
+                    if r.get("bias") and (
+                        r.get("round_state") == "spark"
+                        or (not r.get("round_state") and r.get("bias"))
+                    )
+                ]
+                # Deduplicate by bias name (conviction round duplicates spark data)
+                seen_biases = set()
+                unique_spark_rounds = []
+                for r in spark_rounds_data:
+                    bname = r.get("bias", "").split("—")[0].strip()
+                    if bname and bname not in seen_biases:
+                        seen_biases.add(bname)
+                        unique_spark_rounds.append(r)
 
                 shift_icon = "📈" if conf_shift > 0 else ("📉" if conf_shift < 0 else "➡️")
                 dec_preview = decision[:65] + "…" if len(decision) > 65 else decision
 
                 with st.expander(f"{shift_icon} {date_str}  —  {dec_preview}", expanded=(idx == 0)):
+
+                    # ── Top metrics ───────────────────────────────────────────
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
                         st.markdown("**Clarity**")
@@ -1924,17 +1941,40 @@ elif st.session_state.phase == "reasoning_profile":
                         st.markdown("**Chose**")
                         st.markdown(final_choice)
                     with col_c:
-                        st.markdown("**Bias cycles**")
-                        st.markdown(str(spark_rounds) if spark_rounds else "—")
-
-                    if biases_unique:
-                        st.markdown("")
-                        st.markdown("**Patterns noticed:** " + " · ".join(biases_unique[:4]))
+                        st.markdown("**Domain**")
+                        st.markdown(domain.capitalize() if domain else "—")
 
                     if len(decision) > 65:
                         st.markdown("")
                         st.caption(decision)
 
+                    # ── Bias cycles ───────────────────────────────────────────
+                    if unique_spark_rounds:
+                        st.markdown("")
+                        st.markdown("**What CASPER noticed**")
+                        for r in unique_spark_rounds:
+                            bias_name = r.get("bias", "").split("—")[0].strip()
+                            explanation = r.get("explanation", "")
+                            perspective = r.get("perspective", "")
+                            shifted = r.get("shifted", False)
+                            resonance = "✅ Resonated" if shifted else "↩️ Didn't land"
+
+                            st.markdown(
+                                f"<div style='border-left:3px solid #7c3aed;padding:8px 12px;"
+                                f"margin:6px 0;border-radius:0 6px 6px 0;background:#faf5ff'>"
+                                f"<div style='font-weight:600;font-size:14px;margin-bottom:4px'>"
+                                f"🔍 {bias_name} &nbsp; <span style='font-size:12px;"
+                                f"font-weight:400;color:#6b7280'>{resonance}</span></div>"
+                                + (f"<div style='font-size:13px;color:#374151;margin-bottom:4px'>"
+                                   f"{explanation}</div>" if explanation else "")
+                                + (f"<div style='font-size:12px;color:#6b7280'>"
+                                   f"💡 Alternative explored: <em>{perspective}</em></div>"
+                                   if perspective else "")
+                                + "</div>",
+                                unsafe_allow_html=True
+                            )
+
+                    # ── Conversation replay ───────────────────────────────────
                     conv = h.get("conversation_history", [])
                     if conv:
                         st.markdown("")
