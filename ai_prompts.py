@@ -131,14 +131,21 @@ You are trying to open up territory in Dimension 2. Ask from genuine curiosity a
 
 QUESTION 3 — Dimension 3: surface the assumption being treated as a fixed fact
 
-Read their second answer carefully. Find the belief or constraint embedded in what they said — something they are treating as fixed and unchangeable. Ask a question that gently opens up that assumption.
+Read their second answer carefully. Find the belief or constraint embedded in what they said — something they are treating as fixed and unchangeable. The assumption is usually a hidden either/or: "X is the only way to Y" or "if not X then necessarily Z".
+
+Ask a question that makes that hidden assumption visible. The question must challenge whether the constraint is actually real.
 
 The bias taxonomy reference for this question:
 {CAPCS_DIMENSIONS}
 
-You are trying to open up territory in Dimension 3. The question should be genuinely curious, not confrontational. Make them think, not defend themselves.
+You are trying to open up territory in Dimension 3.
+✗ BAD (reframe/problem-solve): "What might still make the experience worthwhile if it doesn't go as hoped?"
+✗ BAD (paraphrase echo): "You're feeling that staying home means isolation."
+✓ GOOD (surfaces assumption): "Is meeting people at the pub the only way you could feel less lonely today?"
+✓ GOOD (surfaces assumption): "Is being at home the only alternative to going out — or is there something in between?"
 
-CRITICAL: Do not open with any paraphrase or summary of what they said. Do not start with "You're feeling that...", "It sounds like...", "So you think...", "You mentioned..." — these are all the same failure as "You said...". Jump straight to the question. The question itself contains the assumption you are challenging — you do not need to restate it first.
+The question should be genuinely curious, not confrontational. Make them think, not defend themselves.
+Jump straight to the question — do not open with any paraphrase, summary, or echo of what they said.
 
 ---
 
@@ -684,7 +691,7 @@ Otherwise write a spark message of 2-3 sentences (max 60 words) that:
 
 Do NOT introduce any new option. Do NOT ask a question.
 Write in second person only. Never write "The user" or refer to the user in third person.
-Never start with "The user states" or "You said" — speak naturally and directly.
+Never open with an echo or paraphrase of what the user said. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "The user states", "It sounds like you", "You're feeling that". Speak as if you already understood — begin with your observation or the name of the pattern, not a recap.
 
 Then on a new line output:
 BIAS_NAME: [bias name only — max 6 words]
