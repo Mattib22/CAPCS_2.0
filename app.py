@@ -1990,7 +1990,7 @@ elif st.session_state.phase == "reasoning_profile":
                         or (not r.get("round_state") and r.get("bias"))
                     )
                 ]
-                # Deduplicate by bias name (conviction round duplicates spark data)
+                # Deduplicate by bias name
                 seen_biases = set()
                 unique_spark_rounds = []
                 for r in spark_rounds_data:
@@ -1998,6 +1998,15 @@ elif st.session_state.phase == "reasoning_profile":
                     if bname and bname not in seen_biases:
                         seen_biases.add(bname)
                         unique_spark_rounds.append(r)
+
+                # Perspective lives on the counterattack round, not the spark round.
+                # Build bias_name → perspective lookup from counterattack rounds.
+                perspective_by_bias = {
+                    r.get("bias", "").split("—")[0].strip().lower(): r.get("perspective", "")
+                    for r in rounds_log_h
+                    if r.get("round_state") in ("counterattack", "counterattack_rejected")
+                    and r.get("perspective")
+                }
 
                 shift_icon = "📈" if conf_shift > 0 else ("📉" if conf_shift < 0 else "➡️")
                 dec_preview = decision[:65] + "…" if len(decision) > 65 else decision
@@ -2027,7 +2036,7 @@ elif st.session_state.phase == "reasoning_profile":
                         for r in unique_spark_rounds:
                             bias_name = r.get("bias", "").split("—")[0].strip()
                             explanation = r.get("explanation", "")
-                            perspective = r.get("perspective", "")
+                            perspective = perspective_by_bias.get(bias_name.lower(), "") or r.get("perspective", "")
                             shifted = r.get("shifted", False)
                             resonance = "✅ Resonated" if shifted else "↩️ Didn't land"
 
@@ -2222,12 +2231,14 @@ elif st.session_state.phase == "reasoning_profile":
 
                     with st.expander(f"{indicator} {bias_name} — {count}x detected | {shift_rate}% shift rate{correction_badge}"):
                         st.caption(f"Most common in: {domain_str or 'various'} decisions")
-                        with st.spinner(f"Analysing {bias_name}..."):
-                            analysis = get_bias_analysis(
-                                bias_name, count, profile,
-                                "; ".join(set(data["domains"]))
-                            )
-                        box(analysis, style="insight")
+                        _analysis_key = f"_bias_analysis_{bias_name[:30]}_{count}"
+                        if _analysis_key not in st.session_state:
+                            with st.spinner(f"Analysing {bias_name}..."):
+                                st.session_state[_analysis_key] = get_bias_analysis(
+                                    bias_name, count, profile,
+                                    "; ".join(set(data["domains"]))
+                                )
+                        box(st.session_state[_analysis_key], style="insight")
 
                         # ── Co-adaptive feedback UI ────────────────────────────────
                         st.markdown("---")
@@ -2281,16 +2292,23 @@ elif st.session_state.phase == "reasoning_profile":
             if len(completed) < 2:
                 box("Complete more sessions to see your reasoning patterns.", style="info")
 
-            total_rounds = sum(h.get("rounds_completed",0) for h in completed)
-            total_shifts = sum(1 for h in completed
-                for r in h.get("rounds_log",[]) if r.get("shifted"))
-            shift_rate = int(100 * total_shifts / max(total_rounds,1))
+            # Shift rate = perspectives accepted / perspectives proposed
+            # (counterattack accepted vs total counterattack rounds)
+            total_ca = sum(
+                1 for h in completed for r in h.get("rounds_log", [])
+                if r.get("round_state") in ("counterattack", "counterattack_rejected")
+            )
+            total_shifts = sum(
+                1 for h in completed for r in h.get("rounds_log", [])
+                if r.get("round_state") == "counterattack"
+            )
+            shift_rate = int(100 * total_shifts / max(total_ca, 1))
 
-            # Average rounds to first shift — handle both key names
+            # Average round number at which a perspective was first accepted
             first_shifts = []
             for h in completed:
-                for r in h.get("rounds_log",[]):
-                    if r.get("shifted"):
+                for r in h.get("rounds_log", []):
+                    if r.get("round_state") == "counterattack":
                         rn = r.get("round_number") or r.get("round") or 1
                         first_shifts.append(rn)
                         break
