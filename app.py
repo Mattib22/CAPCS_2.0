@@ -1179,7 +1179,7 @@ elif st.session_state.phase == "challenge":
         existing_corrections = load_bias_corrections(uk) if uk else {}
         existing_corr = existing_corrections.get(bias_name_short, {})
 
-        with st.expander("💡 What I noticed in your thinking", expanded=True):
+        with st.expander("💡 What I noticed in your thinking", expanded=False):
             st.markdown(f"**{bias_name_short}**")
             st.markdown(cd.get("explanation_text", ""))
             if existing_corr:
@@ -1889,14 +1889,56 @@ elif st.session_state.phase == "reasoning_profile":
     st.markdown("*How your thinking patterns look across all your sessions.*")
     st.divider()
 
-    if len(completed) < 2:
-        box("Complete at least 2 sessions to see your longitudinal reasoning profile.", style="info")
+    if not completed:
+        box("Complete your first session to see your history here.", style="info")
     else:
-        tab1, tab2, tab3, tab4 = st.tabs(["🎯 Calibration", "🧠 Biases", "🔄 Patterns", "👤 Profile"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Sessions", "🎯 Calibration", "🧠 Biases", "🔄 Patterns", "👤 Profile"])
 
         with tab1:
+            # ── Session History ───────────────────────────────────────────────
+            st.markdown("### 📋 Session History")
+            sessions_sorted = sorted(completed, key=lambda h: h.get("completed_at", ""), reverse=True)
+            for idx, h in enumerate(sessions_sorted):
+                date_str = h.get("completed_at", "")[:10] if h.get("completed_at") else "—"
+                decision = h.get("decision", "")
+                conf_start = h.get("confidence_start", "?")
+                conf_final = h.get("confidence_final", "?")
+                conf_shift = h.get("confidence_shift", 0) or 0
+                shift_sign = "+" if conf_shift >= 0 else ""
+                final_choice = h.get("final_choice", "—") or "—"
+                rounds_log_h = h.get("rounds_log", [])
+                spark_rounds = len([r for r in rounds_log_h if r.get("round_state") == "spark"]) or h.get("rounds_completed", 0)
+                biases = [r.get("bias","").split("—")[0].strip() for r in rounds_log_h if r.get("bias")]
+                biases_unique = list(dict.fromkeys(b for b in biases if b))
+
+                shift_icon = "📈" if conf_shift > 0 else ("📉" if conf_shift < 0 else "➡️")
+                dec_preview = decision[:65] + "…" if len(decision) > 65 else decision
+
+                with st.expander(f"{shift_icon} {date_str}  —  {dec_preview}", expanded=(idx == 0)):
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.markdown("**Clarity**")
+                        st.markdown(f"{conf_start}% → {conf_final}% ({shift_sign}{conf_shift}%)")
+                    with col_b:
+                        st.markdown("**Chose**")
+                        st.markdown(final_choice)
+                    with col_c:
+                        st.markdown("**Bias cycles**")
+                        st.markdown(str(spark_rounds) if spark_rounds else "—")
+
+                    if biases_unique:
+                        st.markdown("")
+                        st.markdown("**Patterns noticed:** " + " · ".join(biases_unique[:4]))
+
+                    if len(decision) > 65:
+                        st.markdown("")
+                        st.caption(decision)
+
+        with tab2:
             # ── Section 1: Calibration Card ───────────────────────────────────────
             st.markdown("### 🎯 Confidence Calibration")
+            if len(completed) < 2:
+                box("Complete more sessions to see trends across time.", style="info")
 
             avg_shift = sum(h.get("confidence_shift",0) for h in completed) / len(completed)
             avg_start = sum(h.get("confidence_start",0) for h in completed) / len(completed)
@@ -1932,9 +1974,11 @@ elif st.session_state.phase == "reasoning_profile":
             # Threshold reached rate
             st.caption(f"Reached your personalised confidence threshold in {threshold_reached} of {len(completed)} sessions ({int(100*threshold_reached/len(completed))}%).")
 
-        with tab2:
+        with tab3:
             # ── Bias Profile ─────────────────────────────────────────────────
             st.markdown("### 🧠 Bias Profile")
+            if len(completed) < 2:
+                box("Complete more sessions to see patterns across time.", style="info")
             _tab2_ph = st.empty()
             _tab2_ph.caption("⏳ Loading bias profile...")
 
@@ -2039,9 +2083,11 @@ elif st.session_state.phase == "reasoning_profile":
             else:
                 box("No bias data yet — complete more sessions.", style="info")
 
-        with tab3:
+        with tab4:
             # ── Reasoning Patterns ───────────────────────────────────────────
             st.markdown("### 🔄 Reasoning Patterns")
+            if len(completed) < 2:
+                box("Complete more sessions to see your reasoning patterns.", style="info")
 
             total_rounds = sum(h.get("rounds_completed",0) for h in completed)
             total_shifts = sum(1 for h in completed
@@ -2095,7 +2141,7 @@ elif st.session_state.phase == "reasoning_profile":
                 elif late_dur > early_dur * 1.15:
                     box("⏱ Your sessions are getting longer — you may be bringing more complex decisions to CAPCS.", style="insight")
 
-        with tab4:
+        with tab5:
             # ── Profile Evolution ─────────────────────────────────────────────
             st.markdown("### 👤 Profile")
 
