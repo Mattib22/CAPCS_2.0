@@ -299,26 +299,21 @@ if st.session_state.get("user_key") and not st.session_state.get("consent_given"
 
 if not st.session_state.get("user_key"):
 
-    st.markdown("### What is CAPCS?")
-    box(
-        "<b>CASPER is your personal thinking companion.</b> When you're facing an important decision "
-        "and feeling uncertain, CASPER helps you think more clearly — not by telling you what to do, "
-        "but by identifying the cognitive biases that may be distorting your thinking, offering "
-        "perspectives you might not have considered, and asking questions that challenge your assumptions.<br><br>"
-        "<b>What is a cognitive bias?</b> A cognitive bias is a systematic pattern in how we think that "
-        "can lead us to make decisions that don't fully reflect reality. They are not flaws in intelligence — "
-        "they are shortcuts the brain uses to process information quickly. Common examples include "
-        "<i>confirmation bias</i> (seeking information that confirms what we already believe), "
-        "<i>sunk cost fallacy</i> (continuing something because of past investment rather than future value), "
-        "and <i>overconfidence</i> (overestimating how certain we are). Most of the time these patterns "
-        "operate below conscious awareness — which is exactly why an external challenge can help.<br><br>"
-        "The goal is not to reach a specific conclusion. It's to help you arrive at a decision you can "
-        "genuinely stand behind — whether that's a new direction or a more confident version of your original one.<br><br>"
-        "<b>How it works:</b> You describe your decision and the options you're considering. "
-        "CAPCS then runs you through up to 5 challenge rounds, each one building on your answers. "
-        "At the end, you get a personalised report with a best-option analysis and a breakdown of your thinking patterns.",
-        style="info"
-    )
+    st.markdown("## 👻 Meet CASPER")
+    st.markdown("*Your personal thinking companion — not an answer engine.*")
+    st.markdown("")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**🧠 Spots your blind spots**")
+        st.caption("Identifies the cognitive bias shaping your thinking — the hidden pattern you can't see from inside it.")
+    with col2:
+        st.markdown("**💬 Asks, not tells**")
+        st.caption("Three focused questions, then a bias reveal, then a direct challenge. You do the thinking. CASPER sharpens it.")
+    with col3:
+        st.markdown("**📊 Tracks your patterns**")
+        st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
+
     st.divider()
 
     tab_new, tab_return = st.tabs(["✨ New user", "🔄 Returning user"])
