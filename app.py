@@ -1974,6 +1974,72 @@ elif st.session_state.phase == "reasoning_profile":
                                 unsafe_allow_html=True
                             )
 
+                    # ── Decision insight ─────────────────────────────────────
+                    if final_choice and final_choice != "—":
+                        st.markdown("")
+                        st.markdown("**Your decision**")
+
+                        # Find the initial leaning (first non-empty leaning in listening rounds)
+                        initial_leaning = ""
+                        for r in rounds_log_h:
+                            if r.get("leaning") and r.get("round_state") in ("listening", "", None):
+                                initial_leaning = r["leaning"].strip()
+                                break
+
+                        choice_changed = bool(
+                            initial_leaning
+                            and initial_leaning.lower() != final_choice.lower()
+                        )
+                        gained_clarity = conf_shift > 0
+
+                        # One-liner interpretation
+                        if choice_changed and gained_clarity:
+                            verdict = "↔️ You moved away from your initial leaning and gained clarity — the challenge shifted your direction."
+                            verdict_color = "#065f46"
+                            verdict_bg = "#d1fae5"
+                        elif choice_changed and not gained_clarity:
+                            verdict = "↔️ Your choice changed, but full clarity didn't land — worth sitting with this one."
+                            verdict_color = "#92400e"
+                            verdict_bg = "#fef3c7"
+                        elif not choice_changed and gained_clarity:
+                            verdict = "✓ You confirmed your original direction with greater clarity — the challenge strengthened your reasoning rather than changing it."
+                            verdict_color = "#1e40af"
+                            verdict_bg = "#dbeafe"
+                        else:
+                            verdict = "→ You held your original direction — the challenge didn't move your thinking this time."
+                            verdict_color = "#374151"
+                            verdict_bg = "#f3f4f6"
+
+                        # Show initial leaning if it changed
+                        leaning_line = ""
+                        if choice_changed and initial_leaning:
+                            leaning_line = (
+                                f"<div style='font-size:12px;color:#6b7280;margin-bottom:4px'>"
+                                f"Started leaning: <em>{initial_leaning}</em></div>"
+                            )
+
+                        # Main bias for this session (first spark round)
+                        main_bias = (unique_spark_rounds[0].get("bias","").split("—")[0].strip()
+                                     if unique_spark_rounds else "")
+                        bias_line = ""
+                        if main_bias:
+                            bias_line = (
+                                f"<div style='font-size:12px;color:#6b7280;margin-bottom:6px'>"
+                                f"Bias at play: <em>{main_bias}</em></div>"
+                            )
+
+                        st.markdown(
+                            f"<div style='border-radius:8px;padding:10px 14px;"
+                            f"background:{verdict_bg};margin:4px 0'>"
+                            f"<div style='font-weight:600;font-size:15px;margin-bottom:6px'>"
+                            f"{final_choice}</div>"
+                            + leaning_line
+                            + bias_line
+                            + f"<div style='font-size:13px;color:{verdict_color}'>{verdict}</div>"
+                            + "</div>",
+                            unsafe_allow_html=True
+                        )
+
                     # ── Conversation replay ───────────────────────────────────
                     conv = h.get("conversation_history", [])
                     if conv:
