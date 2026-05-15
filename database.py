@@ -171,6 +171,7 @@ def save_log(entry: dict):
             "rounds_completed": entry.get("rounds_completed"),
             "round_durations_seconds": entry.get("round_durations_seconds", []),
             "session_duration_seconds": session_duration,
+            "conversation_history": entry.get("conversation_history", []),
         }
         session_res = sb.table("sessions").insert(session_row).execute()
 
@@ -186,11 +187,13 @@ def save_log(entry: dict):
                     "session_id": session_id,
                     "user_key": user_key,
                     "round_number": r.get("round"),
+                    "round_state": r.get("round_state", ""),
                     "timestamp": r.get("timestamp"),
                     "bias": r.get("bias", ""),
                     "explanation": r.get("explanation", ""),
                     "perspective": r.get("perspective", ""),
                     "question": r.get("question", ""),
+                    "conversation_message": r.get("conversation_message", ""),
                     "answer": r.get("answer", ""),
                     "answer_depth": r.get("answer_depth", ""),
                     "answer_emotion": r.get("answer_emotion", ""),

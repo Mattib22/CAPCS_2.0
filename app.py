@@ -1429,6 +1429,7 @@ elif st.session_state.phase == "challenge":
                 "confidence_trajectory": [r.get("confidence", 0) for r in rounds_log],
                 "rounds_completed": sum(1 for r in rounds_log if r.get("round_state") == "spark") or 1,
                 "rounds_log": rounds_log,
+                "conversation_history": cd.get("conversation_history", []),
                 "undecided_outcome": False,
                 "domain": classify_domain(cd.get("decision_short", "")),
                 "timestamp": cd.get("timestamp", ""),
@@ -1933,6 +1934,19 @@ elif st.session_state.phase == "reasoning_profile":
                     if len(decision) > 65:
                         st.markdown("")
                         st.caption(decision)
+
+                    conv = h.get("conversation_history", [])
+                    if conv:
+                        st.markdown("")
+                        with st.expander("💬 View conversation", expanded=False):
+                            for msg in conv:
+                                role = msg.get("role", "")
+                                content = msg.get("content", "")
+                                if role == "assistant":
+                                    st.markdown(f"🧑‍🏫 **CASPER:** {content}")
+                                elif role == "user":
+                                    st.markdown(f"👤 **You:** {content}")
+                                st.markdown("")
 
         with tab2:
             # ── Section 1: Calibration Card ───────────────────────────────────────
