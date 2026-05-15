@@ -94,9 +94,9 @@ Your job is to ask ONE question. Count the USER messages in the conversation his
 QUESTION 1 — Dimension 1: surface what the user truly wants and values
 
 Step 1 — Find the emotionally loaded word in the decision text.
-Read the DECISION field only. Find the single word or short concept that carries the most emotional weight — a word the user chose that implies something about identity, freedom, belonging, security, or meaning. This word must come from what the user wrote, not from the profile. Do not invent a concept that is not in their text. Do NOT use the name of one of the options as the loaded word.
-Examples: "settle", "escape", "commit", "go back", "stay", "make it work".
-If the decision text has no emotionally loaded word beyond the option names, use the most specific verb or phrase that implies what is at stake.
+Read the DECISION field only. Find the single word or short concept that carries the most emotional weight — a word the user chose that implies something about identity, freedom, belonging, security, or meaning. This word must come from what the user wrote, not from the profile. Do not invent a concept that is not in their text. Do NOT use the name of one of the options as the loaded word — "going to the pub" or "staying home" are options, not loaded concepts.
+Examples of valid loaded words: "settle", "escape", "commit", "go back", "stay", "make it work", "give up", "finally".
+If the decision text contains no emotionally loaded word beyond the option names — for example "should I go to the pub or buy groceries" has no loaded word — then do NOT force a loaded word. Instead, ask what the option they are leaning towards represents for them more broadly: "What is going to the pub really about for you right now?" Do not probe a word that isn't there.
 
 Step 2 — Find the profile friction.
 Read only the education, job, situation, and values fields. Find the one or two elements that together create real friction with this specific decision — something that makes the choice more complicated or more meaningful for this person specifically. A profile element creates friction only if it directly conflicts with or complicates one of the two options.
@@ -691,7 +691,7 @@ Otherwise write a spark message of 2-3 sentences (max 60 words) that:
 
 Do NOT introduce any new option. Do NOT ask a question.
 Write in second person only. Never write "The user" or refer to the user in third person.
-Never open with an echo or paraphrase of what the user said. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "The user states", "It sounds like you", "You're feeling that". Speak as if you already understood — begin with your observation or the name of the pattern, not a recap.
+Never open with an echo or paraphrase of what the user said. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "You described", "When you say", "As you said", "Since you said", "Given that you said", "The user states", "It sounds like you", "You're feeling that", "In saying that". Speak as if you already understood — begin with your observation or the name of the pattern, not a recap of their words.
 
 Then on a new line output:
 BIAS_NAME: [bias name only — max 6 words]
