@@ -195,11 +195,17 @@ with st.sidebar:
         for k, v in defaults.items():
             st.session_state[k] = v
         st.session_state.cached_profile = {}
-        # Clear localStorage key via JS
+        # Clear ?uk= from URL and localStorage, then redirect to clean URL so
+        # the next render has no query params to re-authenticate from.
+        st.query_params.clear()
         st.markdown("""
-        <script>localStorage.removeItem('capcs_user_key');</script>
+        <script>
+        localStorage.removeItem('capcs_user_key');
+        const clean = window.location.pathname;
+        window.location.replace(clean);
+        </script>
         """, unsafe_allow_html=True)
-        st.rerun()
+        st.stop()
 
     st.divider()
     with st.expander("📄 Privacy & Data", expanded=False):
@@ -1430,7 +1436,7 @@ elif st.session_state.phase == "challenge":
                 "rounds_completed": sum(1 for r in rounds_log if r.get("round_state") == "spark") or 1,
                 "rounds_log": rounds_log,
                 "conversation_history": cd.get("conversation_history", []),
-                "undecided_outcome": False,
+                "undecided_outcome": conf < CONFIDENCE_THRESHOLD,
                 "domain": classify_domain(cd.get("decision_short", "")),
                 "timestamp": cd.get("timestamp", ""),
                 "completed_at": datetime.now().isoformat(),
@@ -1821,23 +1827,89 @@ Write a warm honest analysis (max 200 words, second person, plain prose, no bull
         rounds_log_display = last.get("rounds_log", [])
         if not rounds_log_display:
             st.caption("No rounds recorded.")
-        for r in rounds_log_display:
-            round_num_display = r.get("round") or r.get("round_number","?")
-            confidence_val = r.get("confidence", 0) or 0
-            shift_val = r.get("shift") or r.get("confidence_shift", 0) or 0
-            shifted_label = "✅ Shifted" if r.get("shifted") else "➡️ Held position"
-            with st.expander(f"Round {round_num_display} — {shifted_label} | Confidence: {confidence_val}% ({shift_val:+}%)"):
-                if r.get("bias"): st.markdown(f"⚠️ **Bias:** {r['bias']}")
-                if r.get("explanation"): st.markdown(f"📖 **Explanation:** {r['explanation']}")
-                if r.get("perspective"): st.markdown(f"💡 **Perspective:** {r['perspective']}")
-                if r.get("question"): st.markdown(f"❓ **Question:** {r['question']}")
-                for fq in r.get("followups",[]):
-                    st.markdown(f"↩️ *Follow-up:* {fq.get('question','')}")
-                    st.markdown(f"   *Answer:* {fq.get('answer','')}")
-                if r.get("answer"): st.markdown(f"💬 **Your answer:** {r['answer']}")
-                if r.get("shifted"):
-                    st.markdown(f"🔄 **How it shifted:** {r.get('how_shifted','')}")
-                    st.markdown(f"→ **New leaning:** {r.get('leaning','—')}")
+        else:
+            # Group raw round entries into bias cycles.
+            # A cycle = listening Q&A → spark (bias named) → counterattack (perspective).
+            # spark_rejected and counterattack_rejected are noted within the cycle.
+            cycles = []
+            pending_listening = []
+            for r in rounds_log_display:
+                state = r.get("round_state", "")
+                if state == "listening":
+                    pending_listening.append(r)
+                elif state in ("spark", "spark_rejected"):
+                    cycles.append({
+                        "listening": pending_listening,
+                        "spark": r,
+                        "counterattack": None,
+                    })
+                    pending_listening = []
+                elif state in ("counterattack", "counterattack_rejected"):
+                    if cycles:
+                        cycles[-1]["counterattack"] = r
+                # conviction rounds are intentionally skipped — captured in Summary tab
+
+            for i, cycle in enumerate(cycles, 1):
+                spark_r = cycle["spark"]
+                ca_r    = cycle["counterattack"]
+                bias_name = (spark_r.get("bias", "") or "").split("—")[0].strip()[:60]
+                accepted  = ca_r and ca_r.get("round_state") == "counterattack"
+                rejected_spark = spark_r.get("round_state") == "spark_rejected"
+                rejected_ca    = ca_r and ca_r.get("round_state") == "counterattack_rejected"
+
+                if accepted:
+                    status = "✅ Accepted"
+                elif rejected_ca:
+                    status = "↩️ Rejected option"
+                elif rejected_spark:
+                    status = "↩️ Rejected bias"
+                else:
+                    status = "➡️"
+
+                label = f"Bias cycle {i} — {bias_name} ({status})" if bias_name else f"Cycle {i} ({status})"
+
+                with st.expander(label):
+                    # ── Conversation (listening Q&A) ──────────────────────────
+                    if cycle["listening"]:
+                        st.markdown("**Conversation**")
+                        for lr in cycle["listening"]:
+                            msg = lr.get("conversation_message") or lr.get("question", "")
+                            if msg:
+                                st.markdown(f"> 🧑‍🏫 {msg}")
+                            if lr.get("answer"):
+                                st.markdown(f"> 👤 {lr['answer']}")
+                            for fq in lr.get("followups", []):
+                                if fq.get("question"):
+                                    st.markdown(f"> 🧑‍🏫 ↩️ *{fq['question']}*")
+                                if fq.get("answer"):
+                                    st.markdown(f"> 👤 {fq['answer']}")
+                        st.divider()
+
+                    # ── Spark (bias reveal) ───────────────────────────────────
+                    spark_msg = spark_r.get("conversation_message", "")
+                    if spark_msg:
+                        st.markdown(f"🧑‍🏫 {spark_msg}")
+                    if bias_name:
+                        st.markdown(f"⚠️ **Bias identified:** {bias_name}")
+                    if spark_r.get("explanation"):
+                        st.caption(spark_r["explanation"])
+                    if rejected_spark:
+                        st.caption("*You said this didn't resonate — CASPER tried a different angle.*")
+
+                    # ── Counterattack (perspective proposed) ──────────────────
+                    if ca_r:
+                        st.divider()
+                        ca_msg = ca_r.get("conversation_message") or ca_r.get("question", "")
+                        if ca_msg:
+                            st.markdown(f"🧑‍🏫 {ca_msg}")
+                        if ca_r.get("perspective"):
+                            st.markdown(f"💡 **Option proposed:** {ca_r['perspective']}")
+                        if accepted:
+                            st.caption("✅ You accepted this perspective.")
+                        elif rejected_ca:
+                            if ca_r.get("answer"):
+                                st.markdown(f"👤 **Why it didn't work:** {ca_r['answer']}")
+                            st.caption("↩️ CASPER tried a different approach.")
 
     # ── TAB 4: Reasoning Profile ───────────────────────────────────────────────
     with tab_profile:

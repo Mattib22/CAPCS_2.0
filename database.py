@@ -172,6 +172,7 @@ def save_log(entry: dict):
             "round_durations_seconds": entry.get("round_durations_seconds", []),
             "session_duration_seconds": session_duration,
             "conversation_history": entry.get("conversation_history", []),
+            "undecided_outcome": entry.get("undecided_outcome", False),
         }
         session_res = sb.table("sessions").insert(session_row).execute()
 
@@ -194,6 +195,7 @@ def save_log(entry: dict):
                     "perspective": r.get("perspective", ""),
                     "question": r.get("question", ""),
                     "conversation_message": r.get("conversation_message", ""),
+                    "followups": r.get("followups", []),
                     "answer": r.get("answer", ""),
                     "answer_depth": r.get("answer_depth", ""),
                     "answer_emotion": r.get("answer_emotion", ""),
