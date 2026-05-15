@@ -197,13 +197,14 @@ What makes a good diagnostic question:
 - It asks something they haven't considered, or something that would reveal a contradiction
 - It cannot be answered with facts or logistics
 
-Build DIRECTLY on their last answer. Use their exact words to show you heard them.
+Build DIRECTLY on their last answer — but do not echo their words back at the start. Jump straight to the question. Do NOT open with "You mentioned", "You said", "You told me", or any paraphrase of their answer.
 
 Rules:
 - One question only, max 35 words, ends with ?
 - Cannot be answered yes/no
 - Do NOT name any bias, pattern, or psychological concept
 - Do NOT ask about facts, logistics, or activities
+- Do NOT start with "You mentioned", "You said", or any variant
 - Warm, direct, curious — speaks to what is happening inside them, not around them
 
 {f"IMPORTANT — THIS IS A SECOND PASS THROUGH THE CONVERSATION:{chr(10)}{loop_context}{chr(10)}Ask questions that open a genuinely different angle from what was already tried.{chr(10)}" if loop_context else ""}
@@ -253,7 +254,7 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
         confirmed_instruction = f"""The user has confirmed that **{confirmed_bias}** resonates with them — do not re-name or re-explain it.
 
 Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
-1. REFLECT (1 sentence): Reference something specific the user said that shows this bias at work, using their words.
+1. REFLECT (1 sentence): Name what the bias is doing to their thinking right now — do NOT open with a quote or paraphrase of their words. Do not start with "Your feeling that '...'", "When you said '...'", or any echo opener. Describe the pattern directly: e.g. "There's a pull here to treat X as the only path to Y."
 2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The connection must be explicit: "Because {confirmed_bias} pulls you toward X, the counterforce is Y — which works by [mechanism]." Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
 
 Tone: warm, direct. Final sentence must end with a question mark."""
@@ -685,15 +686,16 @@ If no bias from this list is clearly earned from the full conversation, respond 
 SIGNAL_INSUFFICIENT
 
 Otherwise write a spark message of 2-3 sentences (max 60 words) that:
-1. Reflects something specific the user said — use their exact words or a close paraphrase
-2. Names the bias naturally mid-sentence as a revelation, not a label: "that feeling of X is called Y"
+1. Opens with an observation about their thinking — not a quote or paraphrase of what they said
+2. Names the bias naturally mid-sentence as a revelation: "that pull toward X is called Y" or "this pattern is called Y"
 3. Explains in one sentence what this bias is doing to their thinking right now
 
 Do NOT introduce any new option. Do NOT ask a question.
 Write in second person only. Never write "The user" or refer to the user in third person.
-Never open with an echo or paraphrase of what the user said. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "You described", "When you say", "As you said", "Since you said", "Given that you said", "The user states", "It sounds like you", "You're feeling that", "In saying that". Speak as if you already understood — begin with your observation or the name of the pattern, not a recap of their words.
+Never open with a direct quote or paraphrase of the user's words. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "You described", "When you say", "As you said", "Since you said", "Given that you said", "That feeling of '[quote]'", "Your feeling that '[quote]'", "The user states", "It sounds like you", "You're feeling that", "In saying that".
+Start with your own observation — e.g. "There's a pull here to treat X as the only path to Y" or "The certainty with which you're treating X as fixed..."
 
-Then on a new line output:
+IMPORTANT — you MUST include both structured fields on new lines after the message. These are required:
 BIAS_NAME: [bias name only — max 6 words]
 BIAS_EXPLANATION: [one plain English sentence — what this bias is]
 
