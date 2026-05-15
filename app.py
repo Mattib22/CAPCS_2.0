@@ -315,7 +315,8 @@ if not st.session_state.get("user_key"):
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
 
     st.markdown("")
-    st.caption(
+    st.markdown("**But what is a cognitive bias?**")
+    st.markdown(
         "A cognitive bias is a mental shortcut your brain uses to process decisions quickly. "
         "In complex or emotionally loaded situations these shortcuts distort your thinking in predictable ways — "
         "and because they feel like clear reasoning, you rarely notice them on your own."
