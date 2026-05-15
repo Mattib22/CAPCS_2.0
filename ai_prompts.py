@@ -576,7 +576,7 @@ def has_enough_signal(conversation_history: list) -> bool:
 Is there enough signal in the user's answers to identify a specific, earned cognitive bias — one grounded in what they actually said across their responses, not a generic one?
 
 Answer YES or NO only. Nothing else."""
-    result = ask_ai(prompt, 10)
+    result = ask_ai(prompt, 50)
     return result.strip().upper().startswith("YES")
 
 
@@ -650,7 +650,7 @@ CONTEXT: {context}
 PROFILE:
 {profile_str}"""
 
-    return ask_ai(prompt, 512)
+    return ask_ai(prompt, 2048)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
