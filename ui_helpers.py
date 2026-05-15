@@ -89,18 +89,23 @@ def scroll_to_chat_bottom():
     """Inject JS to scroll the chat to the bottom after new messages are rendered."""
     st.markdown(
         """<script>
-        setTimeout(function() {
-            var sel = [
-                'section[data-testid="stMain"]',
-                '[data-testid="stAppViewContainer"]',
-                'section.main',
-                '.main'
-            ];
-            for (var i = 0; i < sel.length; i++) {
-                var el = window.parent.document.querySelector(sel[i]);
-                if (el) { el.scrollTop = el.scrollHeight; break; }
+        (function() {
+            function doScroll() {
+                var sel = [
+                    'section[data-testid="stMain"]',
+                    '[data-testid="stAppViewContainer"]',
+                    'section.main',
+                    '.main'
+                ];
+                for (var i = 0; i < sel.length; i++) {
+                    var el = window.parent.document.querySelector(sel[i]);
+                    if (el) { el.scrollTop = el.scrollHeight; return; }
+                }
+                window.parent.scrollTo(0, window.parent.document.body.scrollHeight);
             }
-        }, 120);
+            setTimeout(doScroll, 200);
+            setTimeout(doScroll, 600);
+        })();
         </script>""",
         unsafe_allow_html=True
     )

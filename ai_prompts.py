@@ -255,7 +255,7 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
 
 Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
 1. REFLECT (1 sentence): Name what the bias is doing to their thinking right now — do NOT open with a quote or paraphrase of their words. Do not start with "Your feeling that '...'", "When you said '...'", or any echo opener. Describe the pattern directly: e.g. "There's a pull here to treat X as the only path to Y."
-2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The connection must be explicit: "Because {confirmed_bias} pulls you toward X, the counterforce is Y — which works by [mechanism]." Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
+2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
 
 Tone: warm, direct. Final sentence must end with a question mark."""
 
@@ -263,13 +263,6 @@ Tone: warm, direct. Final sentence must end with a question mark."""
         prompt = f"""You are a thinking partner helping someone work through a real decision.
 
 {confirmed_instruction}
-
----EXTRACT---
-BIAS: [bias name only — max 6 words]
-EXPLANATION: [what this bias is and why it appeared — max 40 words]
-PERSPECTIVE: [the counterattacking option — max 8 words]
-QUESTION: [exact evaluation question from above]
----END---
 
 FULL CONVERSATION — read every turn before writing anything:
 {history}
@@ -280,7 +273,15 @@ LEANING: {leaning or 'genuinely undecided'}
 CONFIDENCE: {confidence}%
 CONTEXT: {context}
 PROFILE:
-{profile_str}{long_section}"""
+{profile_str}{long_section}
+
+After your conversational message, output this block exactly as shown — this is required:
+---EXTRACT---
+BIAS: [bias name only — max 6 words]
+EXPLANATION: [what this bias is and why it appeared — max 40 words]
+PERSPECTIVE: [the option you proposed — max 8 words, no punctuation]
+QUESTION: Does this feel like something that could actually work for you, or does something feel off?
+---END---"""
         return ask_ai(prompt, 4096)
 
     prompt = f"""You are a thinking partner helping someone work through a real decision. You have been listening for {turn_num} turns.
