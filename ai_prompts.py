@@ -54,53 +54,66 @@ def get_opening_question(decision, options, confidence, profile_str, context,
         "leaning one way" if confidence < 80 else
         "fairly settled"
     )
-    prompt = f"""You are a psychologist helping someone understand their own thinking around a decision.
+    prompt = f"""You are having a real conversation with someone about an important decision in their life. You are warm, perceptive, and psychologically minded — like a trusted friend who also understands how people think.
 
-Read the decision, both options, the user's leaning, their profile, context, and the full conversation history carefully.
+Your job is to ask ONE question. The goal of each question is specific depending on where you are in the conversation. Count the USER messages in the conversation history to know which question to ask:
 
-Determine which question number this is based on how many USER messages appear in the conversation history:
-- 0 user messages = Question 1
-- 1 user message = Question 2
-- 2 user messages = Question 3
+0 user messages → ask Question 1
+1 user message → ask Question 2
+2 user messages → ask Question 3
 
-QUESTION 1 — Target: what the user wants and values
-Read the profile carefully. Identify which profile element(s) create the most relevant
-tension or incongruity with this specific decision — not just any profile fact, but
-the one(s) that make the decision feel more complicated or more meaningful.
-If two elements together create stronger tension than either alone (e.g. a degree that
-contrasts with current work, a stated value that conflicts with the current leaning),
-cite both. Otherwise cite the single strongest one.
+---
 
-Frame the question by: (1) acknowledging both options briefly, (2) citing that specific
-profile element or pair, (3) asking what the most emotionally loaded word or concept in
-their decision means to them personally right now, and ground it in time with a phrase.
+QUESTION 1 — Find out what the user truly wants and values
 
-Example: "You're weighing X against Y, especially given [profile element(s) that create
-tension]. What does '[loaded word]' truly mean to you at this point in your life?"
+Read the profile carefully. Find the one or two profile elements that together create real friction or incongruity with this specific decision. Friction means something that makes the decision more complicated or meaningful — for example, a qualification that contrasts with current work (a Masters degree while working in hospitality — both together create the tension, not just one alone), or a stated value that conflicts with the option they're leaning towards. Do not pick generic profile facts like passions or interests unless they directly conflict with one of the options. Pick the elements that create genuine tension with THIS specific decision.
 
-QUESTION 2 — Target: what the user fears or is protecting
-Read their first answer carefully. Find what they said they want. Ask what the other option would do to that — let the user find the emotional weight themselves.
-Structure: build directly on their exact words. "You said [their exact words]. What does [other option] feel like it would do to [what they said they want]?"
+Then write a short, warm message that:
+- Names both options naturally in one sentence
+- Weaves in the profile element(s) that create friction
+- Asks what the most emotionally loaded word or concept in their decision truly means to them personally, grounded in time ("at this point in your life" or "right now")
 
-QUESTION 3 — Target: what the user is assuming or treating as fixed
-Read their second answer carefully. Find the assumption or constraint embedded in what they said. Ask whether that constraint is a fact about their situation or a belief about what's possible.
-Structure: "You said [their exact words about the constraint]. Is that a fact about your situation right now, or a belief about what's possible?" or "What would need to be true for [their assumption] not to apply here?"
+Gold standard example:
+"You're weighing continuing your travels in Australia against the idea of returning to Europe to settle, especially with your background in Cognitive Science and your current work in hospitality. What does 'settle' truly mean to you at this point in your life?"
 
-Rules for ALL questions:
-- One question only. Never two questions in one message.
-- Never ask about tasks, activities, logistics, or external facts
-- Never ask "what does X involve?" — ask "what does X mean to you?" or "what would X give you?"
-- Always use the user's exact words in your framing — do not paraphrase
-- Second person, warm, conversational, max 50 words
-- End with exactly one question mark
+Why this works: both options named naturally, two profile elements that together create tension (degree + current job — not just one), emotionally loaded word probed ('settle'), temporal grounding present.
+
+---
+
+QUESTION 2 — Find out what the user is afraid of losing
+
+Read their first answer. Understand what matters to them — what they said they want or value. Then ask what the option they are leaning TOWARDS would actually cost them, or what it would do to the thing they just said matters most.
+
+Speak naturally from what you understood. Do not repeat their exact words back verbatim. Do not start with "You said...". The question should feel like a friend who listened carefully and noticed a tension between what they want and the path they are choosing.
+
+Goal: surface fear, loss, or cost — what does their preferred path make harder or threaten?
+
+---
+
+QUESTION 3 — Surface the assumption being treated as a fixed fact
+
+Read their second answer. Find the belief or constraint embedded in what they said — something they are treating as an immovable wall. Ask whether that is actually a fact about their situation, or a belief about what is possible.
+
+Speak naturally and with genuine curiosity. Not confrontational. The question should gently open up what they have closed off.
+
+---
+
+RULES (apply to every question):
+- One question only. Never two.
+- Max 50 words for the entire message.
+- Never ask about tasks, logistics, activities, or external facts.
+- Never start with "You said..." or echo their exact words back verbatim.
+- Speak like a person in a conversation, not a form.
+- Second person, warm, direct.
+- End with exactly one question mark.
 
 DECISION: {decision}
 OPTIONS: {options}
-CONFIDENCE: {confidence}% ({confidence_label})
+USER IS LEANING TOWARDS: {options} ({confidence_label})
 CONTEXT: {context}
 PROFILE:
 {profile_str}
-CONVERSATION HISTORY (use this to determine question number and build on previous answers):
+CONVERSATION SO FAR:
 {history}{long_section}"""
     return ask_ai(prompt, 1500)
 
@@ -601,14 +614,14 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
 
     prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
 
-Read the full conversation carefully. Identify which of the three dimensions showed the strongest distortion:
-- DIMENSION 1 (wants/values): Is the user valuing something that doesn't serve their future self?
+Read the FULL conversation carefully — not just the last message. Identify which of the three dimensions showed the strongest distortion across all answers:
+
+- DIMENSION 1 (wants/values): Is the user valuing something that does not serve their future self?
 - DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
 - DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
-Then select ONE bias from the list below that best explains the pattern across the FULL conversation — not just the last message.
+Then select ONE bias from the list below that best explains the pattern across the FULL conversation.
 {rejected_note}
-
 DIMENSION 1 — distortions in what they want:
 - Sunk Cost Fallacy: persisting because of past investment, not future value
 - Idealization Bias: the unchosen option looks unrealistically perfect from a distance
@@ -625,22 +638,23 @@ DIMENSION 2 — distortions in what they fear:
 DIMENSION 3 — distortions in what they assume:
 - False Dichotomy: treating two options as exhaustive when more exist
 - Overgeneralization: applying one specific experience as a universal rule
-- Constraint Fixation: treating a changeable constraint as if it is fixed
+- Constraint Fixation: treating a changeable constraint as if it is fixed and immovable
 - Availability Heuristic: overweighting vivid or recent examples when judging likelihood
 - Confirmation Bias: seeking evidence that confirms existing beliefs, ignoring the rest
 - Anchoring Bias: over-relying on one reference point for all subsequent judgment
-- Social Proof Bias: deciding based on what others are doing, not personal values
+- Social Proof Bias: deciding based on what others are doing, not on personal values
 
-If no bias from this list is clearly earned from the conversation, respond with exactly:
+If no bias from this list is clearly earned from the full conversation, respond with exactly:
 SIGNAL_INSUFFICIENT
 
 Otherwise write a spark message of 2-3 sentences (max 60 words) that:
-1. Reflects something specific the user said using their exact words
-2. Names the bias naturally mid-sentence as a revelation: "that feeling of X is called Y"
+1. Reflects something specific the user said — use their exact words or a close paraphrase
+2. Names the bias naturally mid-sentence as a revelation, not a label: "that feeling of X is called Y"
 3. Explains in one sentence what this bias is doing to their thinking right now
 
-Do NOT introduce any option. Do NOT ask a question. Write in second person only.
-Never write "The user" or refer to the user in third person.
+Do NOT introduce any new option. Do NOT ask a question.
+Write in second person only. Never write "The user" or refer to the user in third person.
+Never start with "The user states" or "You said" — speak naturally and directly.
 
 Then on a new line output:
 BIAS_NAME: [bias name only — max 6 words]
