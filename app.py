@@ -314,6 +314,25 @@ if not st.session_state.get("user_key"):
         st.markdown("**📊 Tracks your patterns**")
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
 
+    st.markdown("")
+    with st.expander("🧠 What is a cognitive bias — and why does it matter?", expanded=False):
+        st.markdown("""
+A **cognitive bias** is a systematic error in how we think. Not a sign of low intelligence — a feature of how every human brain processes information quickly under uncertainty.
+
+The brain doesn't evaluate every decision from scratch. It uses mental shortcuts built from past experience. Most of the time these shortcuts work. But in complex, emotionally loaded situations — the ones that actually matter — they distort reality in predictable ways.
+
+**Why this is a problem for decisions:**
+
+- **Confirmation bias** makes you seek evidence that supports what you already believe, and ignore what contradicts it.
+- **Sunk cost fallacy** makes you continue something because of what you've already invested, not because it still makes sense.
+- **Loss aversion** makes the fear of losing something feel twice as powerful as the pleasure of gaining something equivalent.
+- **False dichotomy** makes you treat two options as the only possibilities, when more exist.
+
+The critical issue: **these patterns operate below conscious awareness.** You don't notice them. You experience them as clear, rational thinking — which is exactly what makes them so difficult to correct on your own.
+
+That's what CASPER is for.
+""")
+
     st.divider()
 
     tab_new, tab_return = st.tabs(["✨ New user", "🔄 Returning user"])
