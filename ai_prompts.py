@@ -591,20 +591,6 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
         f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
-<<<<<<< HEAD
-    
-    rejected_note = ""
-    if rejected_biases:
-        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}"
-    
-    prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
-
-Read the full conversation carefully. Identify which of the three dimensions showed the strongest distortion:
-- DIMENSION 1 (wants/values): Is the user valuing something that doesn't serve their future self?
-- DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
-- DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
-
-=======
 
     rejected_note = ""
     if rejected_biases:
@@ -617,7 +603,6 @@ Read the full conversation carefully. Identify which of the three dimensions sho
 - DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
 - DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
->>>>>>> d4904c0 (Redesign listening and spark prompts)
 Then select ONE bias from the list below that best explains the pattern across the FULL conversation — not just the last message.
 {rejected_note}
 
@@ -664,13 +649,8 @@ FULL CONVERSATION:
 CONTEXT: {context}
 PROFILE:
 {profile_str}"""
-<<<<<<< HEAD
-    
-    return ask_ai(prompt, 4019)
-=======
 
     return ask_ai(prompt, 512)
->>>>>>> d4904c0 (Redesign listening and spark prompts)
 
 
 def extract_spark_fields(spark_response: str) -> dict:
