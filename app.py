@@ -315,15 +315,35 @@ if not st.session_state.get("user_key"):
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
 
     st.markdown("")
-    if st.button("🤔 What is a cognitive bias?", key="bias_explainer_btn"):
-        st.session_state["show_bias_explainer"] = not st.session_state.get("show_bias_explainer", False)
+    _, col_btn, _ = st.columns([2, 1, 2])
+    with col_btn:
+        if st.button("🤔 What is a cognitive bias?", key="bias_explainer_btn", use_container_width=True):
+            st.session_state["show_bias_explainer"] = not st.session_state.get("show_bias_explainer", False)
+
     if st.session_state.get("show_bias_explainer", False):
-        box(
-            "A cognitive bias is a mental shortcut the brain uses to decide quickly. "
-            "In complex or emotionally loaded situations these shortcuts distort your thinking in predictable ways — "
-            "and because they feel like clear reasoning, you rarely notice them on your own. "
-            "An outside perspective is the only reliable way to surface them.",
-            style="info"
+        st.markdown("")
+        st.markdown(
+            """
+<div style="
+    border-left: 4px solid #9A7B3A;
+    background: #FDFBF7;
+    padding: 18px 22px;
+    border-radius: 6px;
+    margin: 4px 0;
+">
+<p style="margin:0 0 10px 0; font-weight:700; font-size:15px;">🧠 Cognitive bias — in plain English</p>
+<p style="margin:0 0 10px 0; font-size:14px; line-height:1.6;">
+Your brain doesn't evaluate every decision from scratch. It uses <strong>mental shortcuts</strong> built from past experience — fast, automatic, mostly invisible.
+</p>
+<p style="margin:0 0 10px 0; font-size:14px; line-height:1.6;">
+In routine situations these shortcuts save time. In <strong>complex or emotionally loaded decisions</strong> — the ones that actually matter — they pull your thinking away from reality in predictable ways.
+</p>
+<p style="margin:0; font-size:14px; line-height:1.6;">
+The problem: <strong>they feel like clear reasoning.</strong> You don't notice them. That's what makes them so hard to correct on your own — and why an outside perspective changes everything.
+</p>
+</div>
+""",
+            unsafe_allow_html=True
         )
 
     st.divider()
