@@ -53,7 +53,7 @@ def ask_ai(prompt, max_tokens=1200):
         except ValueError:
             # Safety filter triggered or empty response — return safe fallback
             return ""
-        text = text.lstrip("*").rstrip("*").strip()
+        text = text.lstrip("*").strip()
         for prefix in ["BIAS:","PERSPECTIVE:","EXPLANATION:","QUESTION:",
                        "Bias:","Perspective:","Explanation:","Question:"]:
             if text.startswith(prefix):
@@ -137,7 +137,10 @@ RULES (apply to every question):
 - One question only. Never two.
 - Max 50 words for the entire message.
 - Never ask about tasks, logistics, activities, or external facts.
-- Never start with "You said..." or echo their exact words back verbatim.
+- NEVER start with "You said..." — this is the most common failure mode. It makes the question feel like a transcript, not a conversation.
+  ✗ BAD: "You said 'meeting new people'. What does buying groceries feel like it would do to that?"
+  ✓ GOOD: "What would staying home actually cost you, beyond the practical side of things?"
+- Do not echo their exact words back verbatim at the start of your message.
 - Speak like a person in a conversation, not a form.
 - Second person, warm, direct.
 - End with exactly one question mark.
@@ -695,13 +698,19 @@ def extract_spark_fields(spark_response: str) -> dict:
     import re as _re
     result = {"spark_message": "", "bias_name": "", "bias_explanation": ""}
 
-    # Match BIAS_NAME in any markdown form: **BIAS_NAME**: X  |  BIAS_NAME: X  |  BIAS NAME: X
-    _KEY = r'[\*\_\-\s]*BIAS[\s_]?{key}[\*\_\s]*:[\*\_\s]*(.+)'
-    name_m = _re.search(_KEY.format(key="NAME"), spark_response, _re.IGNORECASE)
-    exp_m  = _re.search(_KEY.format(key="EXPLANATION"), spark_response, _re.IGNORECASE)
+    # BIAS_NAME: single line only
+    name_m = _re.search(
+        r'[\*\_\-\s]*BIAS[\s_]?NAME[\*\_\s]*:[\*\_\s]*(.+)',
+        spark_response, _re.IGNORECASE
+    )
+    # BIAS_EXPLANATION: capture to end of string (handles line-wrapped explanations)
+    exp_m = _re.search(
+        r'[\*\_\-\s]*BIAS[\s_]?EXPLANATION[\*\_\s]*:[\*\_\s]*(.+)',
+        spark_response, _re.IGNORECASE | _re.DOTALL
+    )
 
     if name_m:
-        result["bias_name"] = name_m.group(1).strip().strip("*").strip("_").strip()
+        result["bias_name"] = name_m.group(1).splitlines()[0].strip().strip("*").strip("_").strip()
     if exp_m:
         result["bias_explanation"] = exp_m.group(1).strip().strip("*").strip("_").strip()
 
