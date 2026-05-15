@@ -303,7 +303,7 @@ if not st.session_state.get("user_key"):
     st.markdown("*Your personal thinking companion.*")
     st.markdown("")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("**🧠 Spots your blind spots**")
         st.caption("Identifies the cognitive bias shaping your thinking — the hidden pattern you can't see from inside it.")
@@ -313,23 +313,6 @@ if not st.session_state.get("user_key"):
     with col3:
         st.markdown("**📊 Tracks your patterns**")
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
-    with col4:
-        st.markdown("**🤔 What is a cognitive bias?**")
-        if st.button("Find out", key="bias_explainer_btn", use_container_width=True):
-            st.session_state["show_bias_explainer"] = not st.session_state.get("show_bias_explainer", False)
-
-    if st.session_state.get("show_bias_explainer", False):
-        st.markdown("")
-        bc1, bc2, bc3 = st.columns(3)
-        with bc1:
-            st.markdown("**⚡ What it is**")
-            st.caption("A mental shortcut the brain uses to decide quickly — fast, automatic, and mostly invisible to the person using it.")
-        with bc2:
-            st.markdown("**🎯 When it distorts**")
-            st.caption("In complex or emotionally loaded decisions, these shortcuts pull your thinking away from reality in predictable ways.")
-        with bc3:
-            st.markdown("**👁 Why you can't see it**")
-            st.caption("It feels like clear reasoning. You experience the bias as logic — which is exactly what makes it so hard to correct alone.")
 
     st.divider()
 
