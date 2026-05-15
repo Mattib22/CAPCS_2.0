@@ -378,6 +378,7 @@ if not st.session_state.get("user_key"):
                         st.session_state.user_key = new_key
                         st.session_state.display_name = display_name
                         st.session_state.phase = "consent"
+                        st.query_params["uk"] = new_key
                         st.markdown(
                             f"<script>localStorage.setItem('capcs_user_key', '{new_key}');</script>",
                             unsafe_allow_html=True
@@ -419,6 +420,7 @@ if not st.session_state.get("user_key"):
                         else:
                             # Registered but never completed consent — send to consent page
                             st.session_state.phase = "consent"
+                        st.query_params["uk"] = recovered_key
                         st.markdown(f"<script>localStorage.setItem('capcs_user_key', '{recovered_key}');</script>", unsafe_allow_html=True)
                         st.rerun()
                     else:
@@ -870,7 +872,6 @@ elif st.session_state.phase == "input":
 elif st.session_state.phase == "generating":
     if not st.session_state.get("consent_given"):
         st.session_state.phase = "consent"; st.rerun()
-    scroll_to_top()
     cd = st.session_state.current_decision
     profile = load_profile()
     observed_profile = st.session_state.get("observed_profile", {})
