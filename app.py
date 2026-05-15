@@ -303,7 +303,7 @@ if not st.session_state.get("user_key"):
     st.markdown("*Your personal thinking companion.*")
     st.markdown("")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("**🧠 Spots your blind spots**")
         st.caption("Identifies the cognitive bias shaping your thinking — the hidden pattern you can't see from inside it.")
@@ -313,11 +313,9 @@ if not st.session_state.get("user_key"):
     with col3:
         st.markdown("**📊 Tracks your patterns**")
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
-
-    st.markdown("")
-    _, col_btn, _ = st.columns([2, 1, 2])
-    with col_btn:
-        if st.button("🤔 What is a cognitive bias?", key="bias_explainer_btn", use_container_width=True):
+    with col4:
+        st.markdown("**🤔 What is a cognitive bias?**")
+        if st.button("Find out", key="bias_explainer_btn", use_container_width=True):
             st.session_state["show_bias_explainer"] = not st.session_state.get("show_bias_explainer", False)
 
     if st.session_state.get("show_bias_explainer", False):
