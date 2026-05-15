@@ -300,7 +300,7 @@ if st.session_state.get("user_key") and not st.session_state.get("consent_given"
 if not st.session_state.get("user_key"):
 
     st.markdown("## 👻 Meet CASPER")
-    st.markdown("*Your personal thinking companion — not an answer engine.*")
+    st.markdown("*Your personal thinking companion.*")
     st.markdown("")
 
     col1, col2, col3 = st.columns(3)
