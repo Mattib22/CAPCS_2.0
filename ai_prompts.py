@@ -580,13 +580,8 @@ Answer YES or NO only. Nothing else."""
     return result.strip().upper().startswith("YES")
 
 
-<<<<<<< HEAD
-def get_spark_message(conversation_history: list, profile_str: str, context: str, 
-                       rejected_biases: list = []) -> str:
-=======
 def get_spark_message(conversation_history: list, profile_str: str, context: str,
                       rejected_biases: list = []) -> str:
->>>>>>> d4904c0 (Redesign listening and spark prompts)
     """
     Spark turn. Names the bias earned from the full conversation.
     Returns the spark message + structured BIAS_NAME/BIAS_EXPLANATION fields.

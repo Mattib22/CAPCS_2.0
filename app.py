@@ -1247,17 +1247,15 @@ elif st.session_state.phase == "challenge":
         if not conversation_msg:
             st.session_state.phase = "generating"; st.rerun()
 
-        with st.chat_message("assistant", avatar="🧑‍🏫"):
-            st.markdown("Could this work for you?")
-        scroll_to_chat_bottom()
         st.markdown("")
         col1, col2 = st.columns(2)
         with col1:
-            ca_yes = st.button("Yes", key=f"ca_yes_{round_num}",
+            ca_yes = st.button("Yes, this could work", key=f"ca_yes_{round_num}",
                                type="primary", use_container_width=True)
         with col2:
-            ca_no = st.button("No", key=f"ca_no_{round_num}",
+            ca_no = st.button("No, this doesn't work for me", key=f"ca_no_{round_num}",
                               use_container_width=True)
+        scroll_to_chat_bottom()
 
         def _go_conviction():
             accepted_option = cd.get("perspective_text", "")
