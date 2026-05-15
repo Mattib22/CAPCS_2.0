@@ -153,7 +153,7 @@ PROFILE:
 {profile_str}
 CONVERSATION SO FAR:
 {history}{long_section}"""
-    return ask_ai(prompt, 512)
+    return ask_ai(prompt, 4000)
 
 
 def get_probing_question(decision, options, leaning, confidence, profile_str,
@@ -204,7 +204,7 @@ PROFILE:
 {profile_str}{long_section}
 
 Output only the question, nothing else."""
-    return ask_ai(prompt, 1500)
+    return ask_ai(prompt, 4000)
 
 
 def get_challenge_response(decision, options, leaning, confidence, profile_str,
@@ -395,7 +395,7 @@ DECISION: {decision}
 OPTIONS: {options}
 LEANING: {leaning or 'genuinely undecided'}
 CONFIDENCE: {confidence}%"""
-    return ask_ai(prompt, 3000)
+    return ask_ai(prompt, 4000)
 
 def get_explanation(bias_text, decision, profile_str, history, last_answer="", longitudinal=""):
     answer_section = f"\nUSER'S MOST RECENT ANSWER: {last_answer}" if last_answer else ""
@@ -411,7 +411,7 @@ BIAS: {bias_text}
 DECISION: {decision}
 USER PROFILE: {profile_str}
 {answer_section}"""
-    return ask_ai(prompt, 2000)
+    return ask_ai(prompt, 4000)
 
 def get_perspective(decision, options, leaning, profile_str, bias_text, history, last_answer="", longitudinal="", is_undecided=False):
     answer_section = f"\nUSER'S MOST RECENT ANSWER (calibrate to what they said):\n{last_answer}" if last_answer else ""
@@ -460,7 +460,7 @@ CURRENTLY LEANING: {leaning or 'genuinely undecided'}
 BIAS IDENTIFIED: {bias_text}
 
 Output only the two lines. Nothing else."""
-    return ask_ai(prompt, 3000)
+    return ask_ai(prompt, 4000)
 
 def get_question(decision, leaning, perspective_text, profile_str, history, last_answer="", longitudinal=""):
     answer_section = f"\nUSER'S MOST RECENT ANSWER (engage directly with this):\n{last_answer}" if last_answer else ""
@@ -488,7 +488,7 @@ CONVERSATION HISTORY:
 DECISION: {decision}
 LEANING: {leaning or 'unspecified'}
 PERSPECTIVE JUST OFFERED: {perspective_text}"""
-    return ask_ai(prompt, 2000)
+    return ask_ai(prompt, 4000)
 
 def is_followup_question(text: str) -> bool:
     """Return True if the user is asking a follow-up rather than making a statement."""
@@ -514,7 +514,7 @@ DECISION: {decision}
 PROFILE: {profile_str}
 HISTORY:
 {history}"""
-    return ask_ai(prompt, 1000)
+    return ask_ai(prompt, 4000)
 
 
 def get_consolidation_question(decision, leaning, rounds_log, profile_str, history) -> str:
@@ -542,7 +542,7 @@ DECISION: {decision}
 CURRENT LEANING: {leaning or 'undecided'}
 USER PROFILE:
 {profile_str}"""
-    return ask_ai(prompt, 1000)
+    return ask_ai(prompt, 4000)
 
 def analyse_answer_quality(answer: str, question: str) -> dict:
     """
@@ -571,7 +571,7 @@ Definitions:
 
     try:
         import json as _json, re as _re
-        result = ask_ai(prompt, 800)
+        result = ask_ai(prompt, 4000)
         if not result:
             return default
 
@@ -852,7 +852,7 @@ Bias: {bias_name} (detected {count}x in: {str(all_contexts)[:80]})
 Profile: {slim_profile}
 
 Max 50 words. Plain prose. Final sentence complete."""
-    return ask_ai(prompt, 1500)
+    return ask_ai(prompt, 4000)
 
 def get_decision_domain(decision, profile):
     """Classify the decision into a domain for Phase 3 longitudinal analysis."""
@@ -885,7 +885,7 @@ Stay in current job
 Take the new offer
 Negotiate counter-offer"""
     try:
-        result = ask_ai(prompt, 600).strip()
+        result = ask_ai(prompt, 4000).strip()
         opts = [line.strip(" -•*").strip() for line in result.split("\n") if line.strip()]
         # Filter to reasonable lengths
         return [o for o in opts if 2 <= len(o.split()) <= 8][:4]
