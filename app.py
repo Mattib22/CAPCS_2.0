@@ -306,7 +306,7 @@ if not st.session_state.get("user_key"):
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("**🧠 Spots your blind spots**")
-        st.caption("Identifies the cognitive bias shaping your thinking — the hidden pattern you can't see from inside it.")
+        st.caption("Identifies the hidden thinking pattern distorting your decision — before you even notice it's there.")
     with col2:
         st.markdown("**💬 Asks, not tells**")
         st.caption("Three focused questions, then a bias reveal, then a direct challenge. You do the thinking. CASPER sharpens it.")
