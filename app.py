@@ -51,7 +51,7 @@ DIMENSION 3 — Distortions in what the user assumes:
 """
 
 # ── PAGE CONFIG ────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="CAPCS — Cognitive Decision Assistant", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="CASPER — Your Personal Thinking Companion", page_icon="👻", layout="centered")
 
 # ── STYLES ─────────────────────────────────────────────────────────────────────
 st.markdown(CSS_STYLES, unsafe_allow_html=True)
@@ -125,8 +125,8 @@ for key, val in defaults.items():
 
 # ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚡ CAPCS")
-    st.markdown("*A thinking partner, not an answer engine.*")
+    st.markdown("### 👻 CASPER")
+    st.markdown("*Your personal thinking companion.*")
 
     # ── Home button ────────────────────────────────────────────────────────────
     if st.button("🏠 New session", key="sidebar_new_session", use_container_width=True, type="primary"):
@@ -227,8 +227,8 @@ Independent researcher · mrborgini95@outlook.com
 # Do NOT use st.write('#') — markdown headers cause scroll anchoring issues
 st.empty()
 st.markdown(
-    "<p style='font-size:24px;font-weight:700;margin:0;padding:0'>⚡ CAPCS</p>"
-    "<p style='font-size:14px;color:#888;margin:0;padding:0'><em>A thinking partner, not an answer engine.</em></p>",
+    "<p style='font-size:24px;font-weight:700;margin:0;padding:0'>👻 CASPER</p>"
+    "<p style='font-size:14px;color:#888;margin:0;padding:0'><em>Your personal thinking companion.</em></p>",
     unsafe_allow_html=True
 )
 st.divider()
@@ -301,8 +301,8 @@ if not st.session_state.get("user_key"):
 
     st.markdown("### What is CAPCS?")
     box(
-        "<b>CAPCS is a Socratic decision-making partner.</b> When you're facing an important decision "
-        "and feeling uncertain, CAPCS helps you think more clearly — not by telling you what to do, "
+        "<b>CASPER is your personal thinking companion.</b> When you're facing an important decision "
+        "and feeling uncertain, CASPER helps you think more clearly — not by telling you what to do, "
         "but by identifying the cognitive biases that may be distorting your thinking, offering "
         "perspectives you might not have considered, and asking questions that challenge your assumptions.<br><br>"
         "<b>What is a cognitive bias?</b> A cognitive bias is a systematic pattern in how we think that "
@@ -475,13 +475,13 @@ elif st.session_state.phase == "consent":
         st.session_state.phase = _starting_phase()
         st.rerun()
     scroll_to_top()
-    st.markdown("<p style='font-size:22px;font-weight:700;margin:0'>⚡ Welcome to CAPCS</p>", unsafe_allow_html=True)
-    st.markdown("*A thinking partner, not an answer engine.*")
+    st.markdown("<p style='font-size:22px;font-weight:700;margin:0'>👻 Welcome to CASPER</p>", unsafe_allow_html=True)
+    st.markdown("*Your personal thinking companion.*")
     st.divider()
 
     box(
         "<b>Before you start, please read this.</b><br><br>"
-        "CAPCS is a Socratic decision-making tool that uses AI to challenge your thinking. "
+        "CASPER is a Socratic decision-making tool that uses AI to challenge your thinking. "
         "It is a research prototype built as part of an independent project in cognitive science.",
         style="info"
     )
@@ -1433,7 +1433,7 @@ elif st.session_state.phase == "challenge":
                 "confidence_shift": conf - cd.get("confidence_start", conf),
                 "confidence_threshold": CONFIDENCE_THRESHOLD,
                 "confidence_trajectory": [r.get("confidence", 0) for r in rounds_log],
-                "rounds_completed": round_num,
+                "rounds_completed": sum(1 for r in rounds_log if r.get("round_state") == "spark") or 1,
                 "rounds_log": rounds_log,
                 "undecided_outcome": False,
                 "domain": classify_domain(cd.get("decision_short", "")),
@@ -1641,7 +1641,7 @@ elif st.session_state.phase == "feedback":
             value="Moderately", key="fb_novelty"
         )
         useful = st.select_slider(
-            "I would use CAPCS again for a future decision.",
+            "I would use CASPER again for a future decision.",
             options=["Definitely not", "Probably not", "Maybe", "Probably yes", "Definitely yes"],
             value="Maybe", key="fb_useful"
         )
@@ -1716,7 +1716,28 @@ elif st.session_state.phase == "report":
             st.metric("Total shift", f"{s:+}%", delta_color="inverse")
 
         st.markdown(f"**Final decision:** {last.get('final_choice','—')}")
-        st.markdown(f"**Rounds completed:** {last.get('rounds_completed',0)}")
+        st.markdown(f"**Bias cycles completed:** {last.get('rounds_completed',0)}")
+
+        # ── Conversation summary ───────────────────────────────────────────────
+        rounds_log_s = last.get("rounds_log", [])
+        biases_found = list(dict.fromkeys(
+            r.get("bias","").split("—")[0].strip()
+            for r in rounds_log_s if r.get("bias") and r.get("round_state") == "spark"
+        ))
+        options_proposed = list(dict.fromkeys(
+            r.get("perspective","")
+            for r in rounds_log_s if r.get("perspective") and r.get("round_state") == "counterattack"
+        ))
+        if biases_found or options_proposed:
+            bias_str = " and ".join(biases_found) if biases_found else "a cognitive pattern"
+            opt_str  = " and ".join(f'"{o}"' for o in options_proposed if o) if options_proposed else "an alternative path"
+            summary_txt = (
+                f"CAPCS identified <b>{bias_str}</b> as the main pattern shaping your thinking. "
+                f"The session proposed {opt_str} as a way to break that pattern. "
+                f"You landed on <b>{last.get('final_choice','—')}</b> with "
+                f"<b>{last.get('confidence_final',0)}% clarity</b>."
+            )
+            box(summary_txt, style="info")
 
         # Longitudinal summary card
         history_all = load_log()
@@ -1938,6 +1959,8 @@ elif st.session_state.phase == "reasoning_profile":
         with tab2:
             # ── Bias Profile ─────────────────────────────────────────────────
             st.markdown("### 🧠 Bias Profile")
+            _tab2_ph = st.empty()
+            _tab2_ph.caption("⏳ Loading bias profile...")
 
             bias_data = {}
             for h in completed:
@@ -1956,6 +1979,7 @@ elif st.session_state.phase == "reasoning_profile":
                     shift_val = r.get("shift") or r.get("confidence_shift") or 0
                     bias_data[name]["shift_sum"] += abs(shift_val)
 
+            _tab2_ph.empty()
             if bias_data:
                 sorted_biases = sorted(bias_data.items(), key=lambda x: x[1]["count"], reverse=True)
                 user_key = st.session_state.get("user_key", "")
@@ -2130,13 +2154,14 @@ elif st.session_state.phase == "reasoning_profile":
                         )
 
             # Profile change history
-            try:
-                sb = get_supabase()
-                user_key = st.session_state.get("user_key","")
-                hist_res = sb.table("profile_history").select("*").eq("user_key", user_key).order("saved_at").execute()
-                history_versions = hist_res.data or []
-            except Exception:
-                history_versions = []
+            with st.spinner("Loading profile history..."):
+                try:
+                    sb = get_supabase()
+                    user_key = st.session_state.get("user_key","")
+                    hist_res = sb.table("profile_history").select("*").eq("user_key", user_key).order("saved_at").execute()
+                    history_versions = hist_res.data or []
+                except Exception:
+                    history_versions = []
 
             st.divider()
             if len(history_versions) <= 1:

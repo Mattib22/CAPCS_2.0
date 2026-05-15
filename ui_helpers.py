@@ -103,8 +103,12 @@ def scroll_to_chat_bottom():
                 }
                 window.parent.scrollTo(0, window.parent.document.body.scrollHeight);
             }
-            setTimeout(doScroll, 200);
-            setTimeout(doScroll, 600);
+            // Fire after paint (most reliable), then again as fallback
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() { doScroll(); });
+            });
+            setTimeout(doScroll, 400);
+            setTimeout(doScroll, 900);
         })();
         </script>""",
         unsafe_allow_html=True

@@ -848,7 +848,7 @@ Write a clear, warm analysis covering:
 4. One concrete, specific next step — not vague encouragement
 
 CRITICAL FORMATTING:
-- Max 200 words
+- Max 100 words
 - Second person ("you", "your")
 - Plain prose — no bullets, no headers
 - Every sentence must be complete — especially the last one
