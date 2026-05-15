@@ -90,25 +90,35 @@ def scroll_to_chat_bottom():
     st.markdown(
         """<script>
         (function() {
-            function doScroll() {
-                var sel = [
-                    'section[data-testid="stMain"]',
-                    '[data-testid="stAppViewContainer"]',
-                    'section.main',
-                    '.main'
-                ];
-                for (var i = 0; i < sel.length; i++) {
-                    var el = window.parent.document.querySelector(sel[i]);
-                    if (el) { el.scrollTop = el.scrollHeight; return; }
+            var _sel = [
+                'section[data-testid="stMain"]',
+                '[data-testid="stAppViewContainer"]',
+                'section.main',
+                '.main'
+            ];
+            function _getEl() {
+                for (var i = 0; i < _sel.length; i++) {
+                    var el = window.parent.document.querySelector(_sel[i]);
+                    if (el) return el;
                 }
-                window.parent.scrollTo(0, window.parent.document.body.scrollHeight);
+                return null;
             }
-            // Fire after paint (most reliable), then again as fallback
-            requestAnimationFrame(function() {
-                requestAnimationFrame(function() { doScroll(); });
-            });
-            setTimeout(doScroll, 400);
-            setTimeout(doScroll, 900);
+            function _scroll() {
+                var el = _getEl();
+                if (el) el.scrollTop = el.scrollHeight;
+                else window.parent.scrollTo(0, 99999);
+            }
+            // Immediate attempts after paint
+            requestAnimationFrame(function() { requestAnimationFrame(_scroll); });
+            [150, 500, 1000].forEach(function(t) { setTimeout(_scroll, t); });
+            // MutationObserver: re-scroll after every DOM change for 2s
+            // This catches Streamlit's own scroll reset which fires as a DOM mutation
+            var _el = _getEl();
+            if (_el) {
+                var _obs = new MutationObserver(_scroll);
+                _obs.observe(_el, {childList: true, subtree: true});
+                setTimeout(function() { _obs.disconnect(); }, 2000);
+            }
         })();
         </script>""",
         unsafe_allow_html=True
