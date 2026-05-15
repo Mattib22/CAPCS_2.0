@@ -315,13 +315,16 @@ if not st.session_state.get("user_key"):
         st.caption("Builds a reasoning profile across sessions — so you learn how you decide, not just what to decide.")
 
     st.markdown("")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown("**🤔 What is a cognitive bias?**")
-        st.caption("A mental shortcut the brain uses to decide quickly. In complex or emotionally loaded situations, these shortcuts distort reality in predictable ways.")
-    with col_b:
-        st.markdown("**⚠️ Why does it matter?**")
-        st.caption("Because they feel like clear reasoning — so you rarely notice them on your own. An outside perspective is the only reliable way to surface them.")
+    if st.button("🤔 What is a cognitive bias?", key="bias_explainer_btn"):
+        st.session_state["show_bias_explainer"] = not st.session_state.get("show_bias_explainer", False)
+    if st.session_state.get("show_bias_explainer", False):
+        box(
+            "A cognitive bias is a mental shortcut the brain uses to decide quickly. "
+            "In complex or emotionally loaded situations these shortcuts distort your thinking in predictable ways — "
+            "and because they feel like clear reasoning, you rarely notice them on your own. "
+            "An outside perspective is the only reliable way to surface them.",
+            style="info"
+        )
 
     st.divider()
 
