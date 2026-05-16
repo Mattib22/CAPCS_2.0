@@ -1,4 +1,4 @@
-# CAPCS — pure UI utility functions
+# CASPER — pure UI utility functions
 
 import streamlit as st
 import re
@@ -26,7 +26,7 @@ def box(text, style="insight"):
            "answer":"answer-box","highlight":"highlight-box"}.get(style,"insight-box")
     st.markdown(f'<div class="{css}">{text}</div>', unsafe_allow_html=True)
 
-def thinking_animation(message="CAPCS is thinking"):
+def thinking_animation(message="CASPER is thinking"):
     """Render a branded animated loading indicator."""
     st.markdown(f"""
     <div class="capcs-thinking">

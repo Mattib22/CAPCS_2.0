@@ -1,4 +1,4 @@
-# CAPCS — constants and CSS styles (no Streamlit calls, no logic)
+# CASPER — constants and CSS styles (no Streamlit calls, no logic)
 
 MAX_ROUNDS = 5
 PROBE_TURNS = 3   # Turns 1-3 = probing questions only; Turn 4+ = challenge with bias

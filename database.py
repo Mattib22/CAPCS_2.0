@@ -1,4 +1,4 @@
-# CAPCS — all Supabase database operations
+# CASPER — all Supabase database operations
 
 import streamlit as st
 import hashlib

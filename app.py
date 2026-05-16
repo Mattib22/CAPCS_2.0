@@ -1,4 +1,4 @@
-# CAPCS — main entry point and orchestration layer
+# CASPER — main entry point and orchestration layer
 
 import streamlit as st
 import os
@@ -26,7 +26,7 @@ from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
                          navigate_to, scroll_to_top, scroll_to_chat_bottom,
                          inject_keepalive, split_options)
 
-CAPCS_DIMENSIONS = """
+CASPER_DIMENSIONS = """
 DIMENSION 1 — Distortions in what the user wants and values:
 - Sunk Cost Fallacy: persisting because of past investment, not future value
 - Idealization Bias: the unchosen option looks unrealistically perfect from a distance
@@ -490,9 +490,9 @@ elif st.session_state.phase == "consent":
         style="info"
     )
 
-    st.markdown("### What data CAPCS collects")
+    st.markdown("### What data CASPER collects")
     st.markdown("""
-CAPCS collects the following data when you use it:
+CASPER collects the following data when you use it:
 - The decisions you describe and the context you provide
 - Your answers to Socratic challenges
 - Your confidence levels and how they change during a session
@@ -504,7 +504,7 @@ CAPCS collects the following data when you use it:
     st.markdown("### How your data is used")
     st.markdown("""
 Your data is used for:
-- Personalising your experience within CAPCS (the system learns your reasoning patterns)
+- Personalising your experience within CASPER (the system learns your reasoning patterns)
 - Improving the tool based on how people use it
 - Potential anonymised research and publication in cognitive science contexts
 
@@ -514,7 +514,7 @@ Your data is used for:
     st.markdown("### Your rights")
     st.markdown("""
 - You can delete all your data at any time using the **Clear my data** button in the sidebar
-- You can stop using CAPCS at any time with no consequence
+- You can stop using CASPER at any time with no consequence
 - Your display name is shown only to you and is never saved to the database
 - Data is retained for 12 months from your last session, then deleted
 - This tool is not a substitute for professional advice of any kind
@@ -536,7 +536,7 @@ Your data is used for:
     both_agreed = agree_research and agree_gdpr
     st.markdown("")
     if st.button(
-        "→ I agree — continue to CAPCS",
+        "→ I agree — continue to CASPER",
         key="consent_agree_btn",
         type="primary",
         use_container_width=True,
@@ -731,7 +731,7 @@ elif st.session_state.phase == "onboarding":
             if st.button("← Back", key="onboarding_back", use_container_width=True):
                 st.session_state.onboarding_step -= 1; st.rerun()
     with col2:
-        btn = "Next →" if step < total - 1 else "Start CAPCS →"
+        btn = "Next →" if step < total - 1 else "Start CASPER →"
         if st.button(btn, key=f"onboarding_next_{step}", type="primary", use_container_width=True):
             if q["type"] == "text" and not answer.strip():
                 st.warning("Please add a short answer to continue.")
@@ -796,7 +796,7 @@ elif st.session_state.phase == "input":
     sc = st.session_state.get("input_session_counter", 0)
 
     st.markdown("**What are you deciding?**")
-    st.caption("This stays private — CAPCS uses it to personalise the conversation.")
+    st.caption("This stays private — CASPER uses it to personalise the conversation.")
     st.markdown("")
 
     context_val = st.text_area(
@@ -883,7 +883,7 @@ elif st.session_state.phase == "generating":
     bias_corrections = load_bias_corrections(user_key_corr) if user_key_corr else {}
     enriched_profile_str = format_profile(profile, observed_profile, bias_corrections)
     history_text = "\n".join([
-        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in cd.get("conversation_history", [])
     ])
     if not st.session_state.get("longitudinal_text"):
@@ -1089,7 +1089,7 @@ elif st.session_state.phase == "challenge":
             with st.chat_message("user", avatar="👤"):
                 st.markdown(ans)
 
-    # ── Current CAPCS message ─────────────────────────────────────────────────
+    # ── Current CASPER message ────────────────────────────────────────────────
     conversation_msg = cd.get("conversation_message", "")
     if conversation_msg and capcs_state != "conviction":
         with st.chat_message("assistant", avatar="🧑‍🏫"):
@@ -1415,7 +1415,7 @@ elif st.session_state.phase == "challenge":
     # STATE: CONVICTION  (5-step closing sequence)
     # ══════════════════════════════════════════════════════════════════════════
     elif capcs_state == "conviction":
-        # Guarantee the CAPCS-proposed option is in the list regardless of
+        # Guarantee the CASPER-proposed option is in the list regardless of
         # whether it was added during generating or _go_conviction.
         _perspective = cd.get("perspective_text", "")
         if _perspective and _perspective not in st.session_state.all_options:
@@ -1617,7 +1617,7 @@ elif st.session_state.phase == "feedback":
     else:
         box(
             "How did this session feel? Five quick questions — takes under 60 seconds. "
-            "Your answers help validate whether CAPCS actually helps people think more clearly.",
+            "Your answers help validate whether CASPER actually helps people think more clearly.",
             style="info"
         )
         st.markdown("")
@@ -2227,7 +2227,7 @@ elif st.session_state.phase == "reasoning_profile":
                 corrections = load_bias_corrections(user_key)
 
                 box(
-                    "Help CAPCS learn about you — tell us whether each detected bias felt accurate. "
+                    "Help CASPER learn about you — tell us whether each detected bias felt accurate."
                     "This directly improves how the system challenges you in future sessions.",
                     style="info"
                 )
@@ -2263,7 +2263,7 @@ elif st.session_state.phase == "reasoning_profile":
                         # ── Co-adaptive feedback UI ────────────────────────────────
                         st.markdown("---")
                         st.markdown("**Was this bias detection accurate for you?**")
-                        st.caption("Your answer directly updates how CAPCS challenges you in future sessions.")
+                        st.caption("Your answer directly updates how CASPER challenges you in future sessions.")
 
                         col1, col2, col3 = st.columns(3)
                         key_base = f"correction_{bias_name.replace(' ','_')[:20]}"
@@ -2271,7 +2271,7 @@ elif st.session_state.phase == "reasoning_profile":
                         with col1:
                             if st.button("✅ Yes, accurate", key=f"{key_base}_yes", use_container_width=True):
                                 save_bias_correction(user_key, bias_name, "accurate", "")
-                                st.success("Noted — CAPCS will keep this in mind as a genuine pattern.")
+                                st.success("Noted — CASPER will keep this in mind as a genuine pattern.")
                                 st.rerun()
                         with col2:
                             if st.button("🔶 Partially", key=f"{key_base}_partial", use_container_width=True):
@@ -2297,7 +2297,7 @@ elif st.session_state.phase == "reasoning_profile":
                             if st.button("Save correction", key=f"{key_base}_save", type="primary"):
                                 save_bias_correction(user_key, bias_name, show_note, note)
                                 st.session_state.pop(f"{key_base}_show_note", None)
-                                st.success("Correction saved — CAPCS will apply more caution with this bias in future sessions.")
+                                st.success("Correction saved — CASPER will apply more caution with this bias in future sessions.")
                                 st.rerun()
 
                         # Show existing note if there is one
@@ -2369,7 +2369,7 @@ elif st.session_state.phase == "reasoning_profile":
                 if late_dur < early_dur * 0.85:
                     box("⏱ Your sessions are getting shorter — you may be becoming more decisive over time.", style="perspective")
                 elif late_dur > early_dur * 1.15:
-                    box("⏱ Your sessions are getting longer — you may be bringing more complex decisions to CAPCS.", style="insight")
+                    box("⏱ Your sessions are getting longer — you may be bringing more complex decisions to CASPER.", style="insight")
 
         with tab5:
             # ── Profile Evolution ─────────────────────────────────────────────
@@ -2417,7 +2417,7 @@ elif st.session_state.phase == "reasoning_profile":
 
             st.divider()
             if len(history_versions) <= 1:
-                st.caption("Profile last updated: first setup. Updating after situation changes helps CAPCS challenge you more accurately.")
+                st.caption("Profile last updated: first setup. Updating after situation changes helps CASPER challenge you more accurately.")
             else:
                 st.markdown(f"**Updated {len(history_versions)-1} time{'s' if len(history_versions)-1 > 1 else ''} since setup**")
                 # Show timeline of meaningful changes

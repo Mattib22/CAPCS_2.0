@@ -1,4 +1,4 @@
-# CAPCS — all Gemini AI calls and prompt functions (v2)
+# CASPER — all Gemini AI calls and prompt functions (v2)
 
 import streamlit as st
 import os
@@ -7,7 +7,7 @@ import json
 import re
 
 
-CAPCS_DIMENSIONS = """
+CASPER_DIMENSIONS = """
 DIMENSION 1 — Distortions in what the user wants and values:
 - Sunk Cost Fallacy: persisting because of past investment, not future value
 - Idealization Bias: the unchosen option looks unrealistically perfect from a distance
@@ -123,7 +123,7 @@ Read their first answer carefully. Absorb what matters to them. Then ask a quest
 Speak naturally from what you understood. Do not repeat their exact words back verbatim. Do not start with "You said...". The question should feel like a friend who listened and noticed a tension.
 
 The bias taxonomy reference for this question:
-{CAPCS_DIMENSIONS}
+{CASPER_DIMENSIONS}
 
 You are trying to open up territory in Dimension 2. Ask from genuine curiosity about what the preferred path costs them emotionally.
 
@@ -136,7 +136,7 @@ Read their second answer carefully. Find the belief or constraint embedded in wh
 Ask a question that makes that hidden assumption visible. The question must challenge whether the constraint is actually real.
 
 The bias taxonomy reference for this question:
-{CAPCS_DIMENSIONS}
+{CASPER_DIMENSIONS}
 
 You are trying to open up territory in Dimension 3.
 ✗ BAD (reframe/problem-solve): "What might still make the experience worthwhile if it doesn't go as hoped?"
@@ -638,7 +638,7 @@ Definitions:
 def has_enough_signal(conversation_history: list) -> bool:
     """Lightweight check: enough signal in conversation to name a specific earned bias?"""
     history_text = "\n".join([
-        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
     prompt = f"""Read this conversation carefully.
@@ -663,7 +663,7 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
         rejected_biases = []
 
     history_text = "\n".join([
-        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
 
@@ -681,7 +681,7 @@ Read the FULL conversation carefully — not just the last message. Identify whi
 
 Then select ONE bias from the taxonomy below that best explains the pattern across the FULL conversation.
 {rejected_note}
-{CAPCS_DIMENSIONS}
+{CASPER_DIMENSIONS}
 
 If no bias from this list is clearly earned from the full conversation, respond with exactly:
 SIGNAL_INSUFFICIENT

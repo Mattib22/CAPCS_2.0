@@ -1,4 +1,4 @@
-# CAPCS — user profile logic, onboarding questions, and longitudinal context
+# CASPER — user profile logic, onboarding questions, and longitudinal context
 
 from collections import Counter
 
@@ -98,7 +98,7 @@ def compute_confidence_threshold(profile: dict, past_sessions: list = None, star
 def build_observed_profile(past_sessions: list) -> dict:
     """
     Build an observed profile from past session data.
-    Augments the static self-reported profile with what CAPCS has actually seen.
+    Augments the static self-reported profile with what CASPER has actually seen.
     """
     completed = [h for h in past_sessions if h.get("confidence_final") is not None]
     if not completed:
@@ -175,7 +175,7 @@ def format_profile(profile, observed: dict = None, corrections: dict = None) -> 
     }
     lines = [f"- {lbl}: {profile[key]}" for key, lbl in fields.items() if profile.get(key)]
 
-    # Append observed profile — what CAPCS has actually seen across past sessions
+    # Append observed profile — what CASPER has actually seen across past sessions
     if observed:
         observed_labels = {
             "observed_recurring_biases": "Observed recurring biases (past sessions)",
