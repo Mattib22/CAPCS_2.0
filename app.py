@@ -278,6 +278,9 @@ if stored_uk and not st.session_state.get("user_key"):
                     st.session_state.phase = starting
     except Exception:
         pass
+    # Rerun so the sidebar re-renders with the now-populated user state.
+    # The condition above only fires when user_key was blank, so no loop risk.
+    st.rerun()
 
 # Step 2: if ?uk= is not in URL and user is not identified, redirect using localStorage.
 # window.location.replace triggers a full reload which Streamlit reads correctly.
