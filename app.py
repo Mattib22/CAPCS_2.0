@@ -211,7 +211,7 @@ with st.sidebar:
     with st.expander("📄 Privacy & Data", expanded=False):
         st.markdown("""
 **What we collect**
-Anonymised decision text, answers, confidence levels, and session feedback. Your display name is never stored in our database.
+Anonymised decision text, answers, confidence levels, and session feedback. Your display name is stored to personalise your experience — it is never shared or used outside CASPER.
 
 **How it's used**
 To personalise your experience and for independent research into decision-making and cognitive bias. Data is never sold or shared with third parties.
@@ -498,7 +498,7 @@ CASPER collects the following data when you use it:
 - Your confidence levels and how they change during a session
 - The cognitive biases detected in your reasoning
 - Your post-session feedback (if you choose to submit it)
-- An anonymous ID generated automatically at first use — your name is never stored
+- An anonymous ID generated from your username + PIN — the original credentials are never stored, only the hash
 """)
 
     st.markdown("### How your data is used")
@@ -515,7 +515,7 @@ Your data is used for:
     st.markdown("""
 - You can delete all your data at any time using the **Clear my data** button in the sidebar
 - You can stop using CASPER at any time with no consequence
-- Your display name is shown only to you and is never saved to the database
+- Your display name is stored to personalise your experience and is never shared or sold
 - Data is retained for 12 months from your last session, then deleted
 - This tool is not a substitute for professional advice of any kind
 - For any data requests, contact: mrborgini95@outlook.com
@@ -947,7 +947,14 @@ elif st.session_state.phase == "generating":
         listening_answers = cd.get("listening_answers", 0)
 
         if capcs_state == "listening":
-            if cd.get("extra_listening", 0) > 0:
+            if sustained_drop and listening_answers >= 2:
+                # User's certainty has been consistently low — stop challenging,
+                # ask one grounding question to consolidate what they already know.
+                message = get_consolidation_question(
+                    cd["decision"], cd.get("leaning", ""),
+                    rounds_log_so_far, enriched_profile_str, history_text
+                )
+            elif cd.get("extra_listening", 0) > 0:
                 # Loop-back turn: use probing question with loop context
                 message = get_probing_question(
                     cd["decision"], cd["options"], cd.get("leaning", ""),
