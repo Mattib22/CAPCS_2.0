@@ -68,10 +68,16 @@ def compute_confidence_threshold(profile: dict, past_sessions: list = None, star
                 # User shifts a lot — raise required shift slightly (easy bar)
                 required_shift = min(required_shift + 3, 25)
 
-            # Shift rate: if user almost never shifts, lower the bar further
-            total_rounds = sum(h.get("rounds_completed", 0) for h in completed)
-            total_shifts = sum(1 for h in completed for r in h.get("rounds_log", []) if r.get("shifted"))
-            shift_rate = total_shifts / max(total_rounds, 1)
+            # Shift rate: accepted counterattacks / total counterattack rounds
+            total_ca = sum(
+                1 for h in completed for r in h.get("rounds_log", [])
+                if r.get("round_state") in ("counterattack", "counterattack_rejected")
+            )
+            total_shifts = sum(
+                1 for h in completed for r in h.get("rounds_log", [])
+                if r.get("round_state") == "counterattack"
+            )
+            shift_rate = total_shifts / max(total_ca, 1)
             if shift_rate < 0.15:
                 required_shift = max(required_shift - 3, 8)
 
@@ -109,12 +115,18 @@ def build_observed_profile(past_sessions: list) -> dict:
         top = Counter(all_biases).most_common(3)
         observed["observed_recurring_biases"] = ", ".join(f"{b} ({c}x)" for b, c in top)
 
-    # Shift rate
-    total_rounds = sum(h.get("rounds_completed", 0) for h in completed)
-    total_shifts = sum(1 for h in completed for r in h.get("rounds_log", []) if r.get("shifted"))
-    if total_rounds > 0:
-        shift_rate = int(100 * total_shifts / total_rounds)
-        observed["observed_shift_rate"] = f"{shift_rate}% of rounds result in a thinking shift"
+    # Shift rate: accepted counterattacks / total counterattack rounds
+    total_ca = sum(
+        1 for h in completed for r in h.get("rounds_log", [])
+        if r.get("round_state") in ("counterattack", "counterattack_rejected")
+    )
+    total_shifts = sum(
+        1 for h in completed for r in h.get("rounds_log", [])
+        if r.get("round_state") == "counterattack"
+    )
+    if total_ca > 0:
+        shift_rate = int(100 * total_shifts / total_ca)
+        observed["observed_shift_rate"] = f"{shift_rate}% of perspectives accepted"
 
     # Most common domain
     domains = [h.get("domain", "") for h in completed if h.get("domain")]
@@ -131,11 +143,11 @@ def build_observed_profile(past_sessions: list) -> dict:
     else:
         observed["observed_calibration"] = f"Posterior stays near prior after reflection (avg {avg_shift:+.1f}%)"
 
-    # Avg rounds to first shift
+    # Avg round number at which a perspective was first accepted
     first_shifts = []
     for h in completed:
         for r in h.get("rounds_log", []):
-            if r.get("shifted"):
+            if r.get("round_state") == "counterattack":
                 rn = r.get("round_number") or r.get("round") or 1
                 first_shifts.append(rn)
                 break
@@ -272,15 +284,21 @@ def build_longitudinal_context(history_sessions: list) -> str:
                 f"Actively seek a DIFFERENT bias angle."
             )
 
-    # Shift pattern
-    total_rounds = sum(h.get("rounds_completed", 0) for h in completed)
-    total_shifts = sum(1 for h in completed for r in h.get("rounds_log", []) if r.get("shifted"))
-    shift_rate = int(100 * total_shifts / max(total_rounds, 1))
-    lines.append(f"Thinking shift rate: {shift_rate}% of rounds")
+    # Shift pattern: accepted counterattacks / total counterattack rounds
+    total_ca = sum(
+        1 for h in completed for r in h.get("rounds_log", [])
+        if r.get("round_state") in ("counterattack", "counterattack_rejected")
+    )
+    total_shifts = sum(
+        1 for h in completed for r in h.get("rounds_log", [])
+        if r.get("round_state") == "counterattack"
+    )
+    shift_rate = int(100 * total_shifts / max(total_ca, 1))
+    lines.append(f"Perspective acceptance rate: {shift_rate}% of proposed alternatives accepted")
     if shift_rate < 20:
-        lines.append("Behaviour note: this user rarely shifts — use stronger, more direct challenges.")
-    elif shift_rate > 60:
-        lines.append("Behaviour note: this user shifts easily — ensure perspectives are well-grounded.")
+        lines.append("Behaviour note: this user rarely accepts alternatives — use stronger, more grounded challenges.")
+    elif shift_rate > 70:
+        lines.append("Behaviour note: this user accepts alternatives readily — ensure perspectives are well-founded.")
 
     # Domain pattern
     domains = [h.get("domain", "") for h in completed if h.get("domain")]
@@ -350,29 +368,37 @@ def build_longitudinal_context(history_sessions: list) -> str:
                 f"Recent key signals from user's answers: {' | '.join(s[:60] for s in recent_signals)}"
             )
 
-    # Rounds to shift
+    # Round at which perspective was first accepted
     first_shifts = []
     for h in completed:
         for r in h.get("rounds_log", []):
-            if r.get("shifted"):
+            if r.get("round_state") == "counterattack":
                 rn = r.get("round_number") or r.get("round") or 1
                 first_shifts.append(rn)
                 break
     if first_shifts:
         avg_rts = sum(first_shifts) / len(first_shifts)
-        lines.append(f"Typically shifts around round {avg_rts:.1f}")
+        lines.append(f"Typically accepts a perspective around round {avg_rts:.1f}")
 
-    # Fix 3: Perspective diversity tracking — collect all past perspectives so they are never repeated
+    # Perspective diversity tracking — collect all past perspectives so they are never repeated.
+    # Perspectives are stored as plain strings in the new system (not "OPTION: X" format).
     past_perspectives = []
     for h in completed:
         for r in h.get("rounds_log", []):
-            p = r.get("perspective", "")
-            if p:
+            p = (r.get("perspective") or "").strip()
+            if not p:
+                continue
+            # Handle legacy "OPTION: X\nWHY: Y" format if present
+            if "OPTION:" in p:
                 for line in p.split("\n"):
                     if line.strip().startswith("OPTION:"):
                         opt = line.replace("OPTION:", "").strip()[:80]
                         if opt and opt not in past_perspectives:
                             past_perspectives.append(opt)
+            else:
+                opt = p[:80]
+                if opt not in past_perspectives:
+                    past_perspectives.append(opt)
     if past_perspectives:
         lines.append(
             f"PERSPECTIVES ALREADY OFFERED IN PAST SESSIONS (never repeat these, "

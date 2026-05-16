@@ -205,7 +205,8 @@ def save_log(entry: dict):
                     "shifted": r.get("shifted", False),
                     "leaning": r.get("leaning", ""),
                     "confidence": r.get("confidence"),
-                    "confidence_shift": r.get("shift", 0),
+                    "shift": r.get("shift", 0),
+                    "confidence_shift": r.get("confidence_shift", r.get("shift", 0)),
                 }
                 sb.table("rounds").insert(round_row).execute()
 

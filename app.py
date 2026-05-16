@@ -890,16 +890,18 @@ elif st.session_state.phase == "generating":
     longitudinal_text = st.session_state.longitudinal_text or ""
 
     rounds_log_so_far = cd.get("rounds_log", [])
-    confidence_dropped = False
-    sustained_drop = False
-    if rounds_log_so_far:
-        last_shift = rounds_log_so_far[-1].get("shift", 0) or 0
-        if last_shift < 0:
-            confidence_dropped = True
-        if len(rounds_log_so_far) >= 2:
-            prev_shift = rounds_log_so_far[-2].get("shift", 0) or 0
-            if last_shift < 0 and prev_shift < 0:
-                sustained_drop = True
+    # Detect rising uncertainty via answer_certainty signals from recent listening
+    # rounds. Per-round confidence slider isn't updated mid-session, so this is
+    # the best available proxy for "user is getting more confused, not less."
+    recent_listening = [
+        r for r in rounds_log_so_far if r.get("round_state") == "listening"
+    ][-3:]
+    low_certainty_count = sum(
+        1 for r in recent_listening
+        if r.get("answer_certainty") in ("low", "hedging")
+    )
+    confidence_dropped = low_certainty_count >= 2
+    sustained_drop = low_certainty_count >= 3
     is_undecided = cd.get("is_undecided", False)
     round_num = cd.get("rounds", 0) + 1
 
@@ -1016,6 +1018,8 @@ elif st.session_state.phase == "generating":
                 history_text, cd.get("last_answer", ""), context, longitudinal_text,
                 emotion=emotion, turn_num=round_num,
                 is_undecided=is_undecided,
+                confidence_dropped=confidence_dropped,
+                sustained_drop=sustained_drop,
                 confirmed_bias=confirmed_bias
             )
             conversation_message = get_conversation_message(full_response)
@@ -1131,6 +1135,10 @@ elif st.session_state.phase == "challenge":
                 "confidence": cd.get("confidence_before", 50),
                 "shift": 0, "confidence_shift": 0,
             })
+            # If the user mentioned a new concrete option in their answer, surface it
+            new_opt = signals.get("new_option", "").strip()
+            if new_opt and new_opt not in st.session_state.all_options:
+                st.session_state.all_options.append(new_opt)
 
             # Decide next state
             if extra_listening > 0:
@@ -1168,6 +1176,15 @@ elif st.session_state.phase == "challenge":
                 "rejected_options": cd.get("rejected_options", []),
                 "confirmed_bias": cd.get("confirmed_bias", ""),
                 "answer_signals": signals,
+                # Preserve loop-back context and current AI state so they survive
+                # across multiple listening turns in a rejected-bias loop.
+                "loop_context": cd.get("loop_context", ""),
+                "bias_text": cd.get("bias_text", ""),
+                "explanation_text": cd.get("explanation_text", ""),
+                "perspective_text": cd.get("perspective_text", ""),
+                "perspective_option": cd.get("perspective_option", ""),
+                "question_text": cd.get("question_text", ""),
+                "conversation_message": cd.get("conversation_message", ""),
             }
             st.session_state.phase = "generating"
             st.rerun()
@@ -1217,7 +1234,7 @@ elif st.session_state.phase == "challenge":
                 "conversation_message": cd.get("conversation_message", ""),
                 "followups": [], "answer": f"[{verdict}]",
                 "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "answer_key_signal": "", "shifted": True, "still_undecided": False,
                 "how_shifted": "", "leaning": cd.get("leaning", ""),
                 "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
             })
