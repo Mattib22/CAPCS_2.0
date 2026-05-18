@@ -249,11 +249,7 @@ def load_log() -> list:
 def delete_log(user_key: str):
     try:
         sb = get_supabase()
-        # Delete sessions first — rounds reference sessions via session_id
-        sessions_res = sb.table("sessions").select("id").eq("user_key", user_key).execute()
-        session_ids = [r["id"] for r in (sessions_res.data or []) if r.get("id")]
         sb.table("sessions").delete().eq("user_key", user_key).execute()
-        # Delete rounds and feedback explicitly (in case CASCADE is not configured)
         sb.table("rounds").delete().eq("user_key", user_key).execute()
         sb.table("session_feedback").delete().eq("user_key", user_key).execute()
     except Exception:
