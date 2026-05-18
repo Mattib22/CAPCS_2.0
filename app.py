@@ -981,11 +981,21 @@ elif st.session_state.phase == "generating":
             st.session_state.current_decision = cd
 
         elif capcs_state == "spark":
+            _conv_hist_for_spark = cd.get("conversation_history", [])
+            _rejected_for_spark = cd.get("rejected_biases", [])
+            print(
+                f"[CASPER DEBUG] SPARK FIRE — "
+                f"conversation_history length: {len(_conv_hist_for_spark)}, "
+                f"user messages: {sum(1 for m in _conv_hist_for_spark if m.get('role') == 'user')}, "
+                f"rejected_biases: {_rejected_for_spark}"
+            )
+            for _i, _m in enumerate(_conv_hist_for_spark):
+                print(f"  [{_i}] {_m.get('role','?')}: {str(_m.get('content',''))[:80]}")
             spark_response = get_spark_message(
-                cd.get("conversation_history", []),
+                _conv_hist_for_spark,
                 enriched_profile_str,
                 context,
-                cd.get("rejected_biases", [])
+                _rejected_for_spark
             )
             fields = extract_spark_fields(spark_response)
             message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
@@ -1165,6 +1175,12 @@ elif st.session_state.phase == "challenge":
                 next_state = "listening"
                 new_extra = 0
 
+            print(
+                f"[CASPER DEBUG] STATE TRANSITION: listening → {next_state} "
+                f"(listening_answers={listening_answers}, extra_listening={extra_listening}→{new_extra}, "
+                f"conv_hist_len={len(conv_hist)}, rejected_biases={cd.get('rejected_biases', [])})"
+            )
+
             st.session_state.current_decision = {
                 "decision": cd["decision"],
                 "decision_short": cd.get("decision_short", ""),
@@ -1277,6 +1293,7 @@ elif st.session_state.phase == "challenge":
             rejected = cd.get("rejected_biases", [])
             if bias_name_short not in rejected:
                 rejected.append(bias_name_short)
+            print(f"[CASPER DEBUG] SPARK REJECTED — bias: '{bias_name_short}', rejected_biases now: {rejected}")
             loop_ctx = (
                 f"Previously tried bias: '{bias_name_short}'. "
                 f"User said it doesn't resonate. "
