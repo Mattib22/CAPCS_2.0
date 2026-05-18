@@ -1476,7 +1476,7 @@ elif st.session_state.phase == "challenge":
                 "confidence_final": conf,
                 "confidence_shift": conf - cd.get("confidence_start", conf),
                 "confidence_threshold": CONFIDENCE_THRESHOLD,
-                "confidence_trajectory": [r.get("confidence", 0) for r in rounds_log],
+                "confidence_trajectory": [cd.get("confidence_start", conf), conf],
                 "rounds_completed": sum(1 for r in rounds_log if r.get("round_state") == "spark") or 1,
                 "rounds_log": rounds_log,
                 "conversation_history": cd.get("conversation_history", []),
@@ -1505,6 +1505,17 @@ elif st.session_state.phase == "challenge":
                 if st.button(opt, key=f"conviction_opt_{i}", use_container_width=True):
                     st.session_state["_final_choice"] = opt
                     st.rerun()
+            # Fallback: if no options were detected or all_options is empty, let user type
+            if not st.session_state.get("all_options"):
+                typed = st.text_input(
+                    "What are you going with?",
+                    placeholder="Describe your decision in a few words...",
+                    key="conviction_typed_fallback"
+                )
+                if typed and typed.strip():
+                    if st.button("→ That's my choice", key="conviction_typed_btn", type="primary"):
+                        st.session_state["_final_choice"] = typed.strip()
+                        st.rerun()
 
         # ── Step 2 — Confidence slider ────────────────────────────────────────
         elif confidence_stored is None:

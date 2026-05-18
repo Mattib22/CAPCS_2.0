@@ -249,7 +249,13 @@ def load_log() -> list:
 def delete_log(user_key: str):
     try:
         sb = get_supabase()
+        # Delete sessions first — rounds reference sessions via session_id
+        sessions_res = sb.table("sessions").select("id").eq("user_key", user_key).execute()
+        session_ids = [r["id"] for r in (sessions_res.data or []) if r.get("id")]
         sb.table("sessions").delete().eq("user_key", user_key).execute()
+        # Delete rounds and feedback explicitly (in case CASCADE is not configured)
+        sb.table("rounds").delete().eq("user_key", user_key).execute()
+        sb.table("session_feedback").delete().eq("user_key", user_key).execute()
     except Exception:
         pass
 
@@ -308,10 +314,17 @@ def save_bias_correction(user_key: str, bias_name: str, verdict: str, note: str)
         st.warning(f"Could not save correction: {e}")
 
 def load_bias_corrections(user_key: str) -> dict:
-    """Load all user corrections keyed by bias name."""
+    """Load all user corrections keyed by bias name. Ordered oldest-first so the
+    latest correction always wins when the same bias has been rated multiple times."""
     try:
         sb = get_supabase()
-        res = sb.table("bias_corrections").select("*").eq("user_key", user_key).execute()
+        res = (
+            sb.table("bias_corrections")
+            .select("*")
+            .eq("user_key", user_key)
+            .order("created_at")
+            .execute()
+        )
         corrections = {}
         for row in (res.data or []):
             corrections[row["bias_name"]] = {
