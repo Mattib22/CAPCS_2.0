@@ -194,18 +194,15 @@ with st.sidebar:
             pass
         for k, v in defaults.items():
             st.session_state[k] = v
-        st.session_state.cached_profile = {}
-        # Clear ?uk= from URL and localStorage, then redirect to clean URL so
-        # the next render has no query params to re-authenticate from.
+        st.session_state["user_key"] = ""
+        st.session_state["cached_profile"] = {}
         st.query_params.clear()
-        st.markdown("""
-        <script>
-        localStorage.removeItem('capcs_user_key');
-        const clean = window.location.pathname;
-        window.location.replace(clean);
-        </script>
-        """, unsafe_allow_html=True)
-        st.stop()
+        # Clear localStorage key so the returning-user JS check doesn't restore the old identity
+        st.markdown(
+            "<script>localStorage.removeItem('capcs_user_key');</script>",
+            unsafe_allow_html=True
+        )
+        st.rerun()
 
     st.divider()
     with st.expander("📄 Privacy & Data", expanded=False):
