@@ -911,3 +911,92 @@ Negotiate counter-offer"""
         return [o for o in opts if 2 <= len(o.split()) <= 8][:4]
     except Exception:
         return []
+
+
+def get_counterattack_followup(conversation_history: list, user_message: str,
+                                option_proposed: str, bias_confirmed: str,
+                                profile_str: str, context: str) -> str:
+    """
+    Handles free-text user responses during the counterattack state.
+    Classifies the response and routes:
+      - Clarifying question  → answer directly, stay in counterattack (CONTINUE)
+      - Request for alternatives → offer a refined option, stay in counterattack (CONTINUE)
+      - Pushback / objection → acknowledge and refine, stay in counterattack (CONTINUE)
+      - Conviction signal    → warm acknowledgement + CONVINCED signal
+
+    Output format:
+      [conversational response — max 80 words]
+      ---SIGNAL---
+      ROUTE: CONVINCED or CONTINUE
+      ---END---
+    """
+    history_text = "\n".join([
+        f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history
+    ])
+
+    prompt = f"""You are a thinking partner mid-conversation. You proposed a specific option to help someone break a cognitive bias, and they've responded. Read their response carefully.
+
+OPTION YOU PROPOSED: {option_proposed}
+BIAS IDENTIFIED: {bias_confirmed}
+USER'S RESPONSE: {user_message}
+
+Their response falls into one of four types — identify which and reply accordingly:
+
+TYPE 1 — CLARIFYING QUESTION: They want to understand the option better ("What does that mean?", "How would that work?", "Like what exactly?")
+→ Answer directly and concretely in 2-3 sentences. Be specific to their situation — not generic. End with: "Does that make it feel more or less workable for you?"
+
+TYPE 2 — REQUESTING ALTERNATIVES: They want a different option ("Are there other ways?", "What else could work?", "That specific thing won't work for me")
+→ One sentence acknowledging what didn't land. Offer ONE different option that still counters {bias_confirmed} but from a different angle. Ground it in something specific they said. End with the evaluation question.
+
+TYPE 3 — PUSHBACK / OBJECTION: They name a specific reason the option won't work ("I can't because...", "That assumes X", "Yes but what about Y")
+→ One sentence acknowledging the specific constraint they named. Refine the option to account for it — if the constraint makes it genuinely unworkable, modify it rather than abandon it. End with the evaluation question.
+
+TYPE 4 — CONVICTION SIGNAL: They clearly accept or feel ready ("Yes, that makes sense", "I think that's it", "OK I get it now", "That actually resonates", "I'm going to do that")
+→ One warm sentence of genuine acknowledgement — something that reflects what specifically shifted for them, not "Great!" Then output the signal.
+
+The evaluation question for types 1–3: "Does this feel like something that could actually work for you, or does something about it feel off?"
+
+FULL CONVERSATION:
+{history_text}
+
+CONTEXT: {context}
+PROFILE:
+{profile_str}
+
+Rules:
+- Max 80 words for the conversational response
+- Second person, warm, direct
+- Never say "I notice", "it seems like", or "the counterforce"
+- Never open with hollow affirmations ("Great!", "Absolutely!", "Of course!")
+- Reference the user's specific words — not generic alternatives from the profile alone
+
+Output your response, then on new lines:
+---SIGNAL---
+ROUTE: CONVINCED or CONTINUE
+---END---"""
+
+    return ask_ai(prompt, 4096)
+
+
+def extract_counterattack_signal(response: str) -> dict:
+    """
+    Parse the ---SIGNAL--- block from get_counterattack_followup output.
+    Returns dict with 'message' (what the user sees) and 'route' (CONVINCED or CONTINUE).
+    Falls back to CONTINUE on any parse failure.
+    """
+    default = {"message": response.strip(), "route": "CONTINUE"}
+    try:
+        if "---SIGNAL---" not in response:
+            return default
+        message = response.split("---SIGNAL---")[0].strip()
+        signal_block = response.split("---SIGNAL---")[1].split("---END---")[0].strip()
+        route = "CONTINUE"
+        for line in signal_block.split("\n"):
+            if line.strip().upper().startswith("ROUTE:"):
+                val = line.split(":", 1)[1].strip().upper()
+                if val in ("CONVINCED", "CONTINUE"):
+                    route = val
+        return {"message": message, "route": route}
+    except Exception:
+        return default
