@@ -794,6 +794,20 @@ elif st.session_state.phase == "input":
     st.caption("This stays private — CASPER uses it to personalise the conversation.")
     st.markdown("")
 
+    _decision_examples = [
+        "e.g. I've been offered a promotion that means relocating — should I take it or stay in my current role?",
+        "e.g. I'm deciding whether to do a Master's degree now or gain work experience first.",
+        "e.g. I have two job offers — one pays more but feels less interesting, the other is exciting but risky.",
+        "e.g. I'm thinking about leaving my stable job to freelance full-time — should I make the jump?",
+        "e.g. I've saved enough for a deposit — should I buy now or keep renting and invest instead?",
+        "e.g. My partner and I disagree about whether to move cities — how do I think through what I actually want?",
+        "e.g. I'm considering going back to study but I'm not sure the cost and time are worth it.",
+        "e.g. Should I end a friendship that's started to feel one-sided, or give it more time?",
+        "e.g. I've been offered a chance to start a business with a friend — should I do it or is it too risky?",
+        "e.g. I don't know whether to stay in my current relationship or walk away.",
+    ]
+    _decision_placeholder = _decision_examples[sc % len(_decision_examples)]
+
     context_val = st.text_area(
         "Your situation",
         placeholder="What's your current situation? Any context useful for this decision — where you are in life, relevant constraints, what's at stake...",
@@ -802,7 +816,7 @@ elif st.session_state.phase == "input":
     )
     decision_val = st.text_area(
         "The decision",
-        placeholder="What decision are you working through? e.g. I'm in Australia and don't know whether to keep travelling or go back to Europe.",
+        placeholder=_decision_placeholder,
         height=90,
         key=f"form_decision_{sc}"
     )
