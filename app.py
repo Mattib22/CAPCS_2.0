@@ -363,8 +363,10 @@ if not st.session_state.get("user_key"):
                 display_name = new_username.strip()
                 try:
                     sb = get_supabase()
-                    existing = sb.table("users").select("user_key").eq("user_key", new_key).execute()
-                    if existing.data:
+                    existing = sb.table("users").select("user_key, consent_given_at").eq("user_key", new_key).execute()
+                    existing_rows = existing.data or []
+                    consented = any(r.get("consent_given_at") for r in existing_rows)
+                    if existing_rows and consented:
                         st.warning("This username + PIN combination already exists. Use the **Returning user** tab to log in, or choose a different combination.")
                     else:
                         # Upsert: works whether or not the row exists already
@@ -406,22 +408,22 @@ if not st.session_state.get("user_key"):
                 try:
                     sb = get_supabase()
                     res = sb.table("users").select("display_name, consent_given_at").eq("user_key", recovered_key).execute()
-                    if res.data:
-                        row = res.data[0]
+                    rows = res.data or []
+                    if rows:
+                        # Prefer a row with consent_given_at set (handles duplicate-row edge case)
+                        row = next((r for r in rows if r.get("consent_given_at")), rows[0])
                         st.session_state.user_key = recovered_key
-                        st.session_state.display_name = row.get("display_name", ret_username.strip())
-                        # Only mark consent given if they actually completed it
+                        st.session_state.display_name = row.get("display_name") or ret_username.strip()
                         if row.get("consent_given_at"):
                             st.session_state.consent_given = True
                             st.session_state.phase = _starting_phase()
                         else:
-                            # Registered but never completed consent — send to consent page
                             st.session_state.phase = "consent"
                         st.query_params["uk"] = recovered_key
                         st.markdown(f"<script>localStorage.setItem('capcs_user_key', '{recovered_key}');</script>", unsafe_allow_html=True)
                         st.rerun()
                     else:
-                        st.error("No session found for this username + PIN combination. Please check your credentials or create a new profile.")
+                        st.error("No account found for this username + PIN. Double-check your credentials — usernames are case-insensitive but PINs are case-sensitive.")
                 except Exception as e:
                     st.error(f"Could not connect to retrieve your session: {e}")
 
