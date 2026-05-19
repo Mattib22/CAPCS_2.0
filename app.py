@@ -1347,6 +1347,10 @@ elif st.session_state.phase == "challenge":
             new_cd["conversation_history"] = conv_hist
             new_cd["capcs_state"] = "conviction"
             st.session_state.current_decision = new_cd
+            # Pre-set final_choice to the counterattacking option — the user confirmed
+            # it by clicking "Yes", so conviction step 1 (option picker) is redundant.
+            # This also prevents the original leaning from being recorded as final_choice.
+            st.session_state["_final_choice"] = accepted_option or cd.get("leaning", "")
             st.rerun()
 
         if ca_yes:

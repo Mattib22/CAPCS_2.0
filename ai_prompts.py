@@ -255,7 +255,7 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
 
 Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
 1. REFLECT (1 sentence): Name what the bias is doing to their thinking right now — do NOT open with a quote or paraphrase of their words. Do not start with "Your feeling that '...'", "When you said '...'", or any echo opener. Describe the pattern directly: e.g. "There's a pull here to treat X as the only path to Y."
-2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
+2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
 
 Tone: warm, direct. Final sentence must end with a question mark."""
 
@@ -301,7 +301,7 @@ The message does exactly three things:
    Sentence 2: "You're prioritizing [what the bias causes them to prioritize] over [what they're ignoring or suppressing as a result]."
    The bias name must feel like a revelation — precise and surprising, not generic.
 
-3. COUNTERATTACK (2 sentences): Introduce ONE concrete option as the direct antidote to the bias. Ground it in the user's specific constraints (money, location, relationship, visa, time — whatever they mentioned). Warm structure: "One way to counteract this is [Option] — [one sentence why this is the antidote, specific to their context]." Do NOT say "the counterforce is X" — that sounds mechanical. Then end with ONE question that asks the user to EVALUATE the option, not plan within it.
+3. COUNTERATTACK (2 sentences): Introduce ONE concrete option as the direct antidote to the bias. The option MUST reference at least one specific word, fear, desire, or constraint the user actually mentioned — not a generic alternative invented from the profile alone. Ground it in the user's specific constraints (money, location, relationship, visa, time — whatever they mentioned). Warm structure: "One way to counteract this is [Option] — [one sentence why this is the antidote, specific to their context]." Do NOT say "the counterforce is X" — that sounds mechanical. Then end with ONE question that asks the user to EVALUATE the option, not plan within it.
    WRONG question: "How could X fit your travel plans?" (assumes acceptance)
    RIGHT question: "Does X feel like something that could actually work for you, or does something about it feel off?" (asks for evaluation)
    The user has not agreed to the option yet. Do not assume they have.
@@ -694,7 +694,8 @@ Otherwise write a spark message of 2-3 sentences (max 60 words) that:
 Do NOT introduce any new option. Do NOT ask a question.
 Write in second person only. Never write "The user" or refer to the user in third person.
 Never open with a direct quote or paraphrase of the user's words. The following openers are all forbidden: "You said", "You mentioned", "You told me", "You noted", "You described", "When you say", "As you said", "Since you said", "Given that you said", "That feeling of '[quote]'", "Your feeling that '[quote]'", "The user states", "It sounds like you", "You're feeling that", "In saying that".
-Start with your own observation — e.g. "There's a pull here to treat X as the only path to Y" or "The certainty with which you're treating X as fixed..."
+Never open with a third-person observation about their thinking as if viewed from the outside — "The certainty with which you're treating X..." is forbidden because it frames the user as an object of analysis. Speak from inside the conversation: "That pull toward X...", "What's keeping you from...", "There's a pattern here..."
+Start with your own direct observation — e.g. "That pull toward X is making Y feel like the only option" or "There's a pattern here where X keeps getting treated as fixed..."
 
 IMPORTANT — you MUST include both structured fields on new lines after the message. These are required:
 BIAS_NAME: [bias name only — max 6 words]
