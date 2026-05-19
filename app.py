@@ -1079,6 +1079,10 @@ elif st.session_state.phase == "challenge":
     capcs_state = cd.get("capcs_state", "listening")
     user_key_corr = st.session_state.get("user_key", "")
     bias_corrections = load_bias_corrections(user_key_corr) if user_key_corr else {}
+    profile = load_profile()
+    observed_profile = st.session_state.get("observed_profile", {})
+    enriched_profile_str = format_profile(profile, observed_profile, bias_corrections)
+    context = cd.get("context", "")
     round_num = cd.get("rounds", 0) + 1
     CONFIDENCE_THRESHOLD = st.session_state.get("confidence_threshold", 75)
 
