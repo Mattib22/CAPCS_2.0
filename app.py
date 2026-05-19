@@ -197,11 +197,8 @@ with st.sidebar:
         st.session_state["user_key"] = ""
         st.session_state["cached_profile"] = {}
         st.query_params.clear()
-        # Clear localStorage key so the returning-user JS check doesn't restore the old identity
-        st.markdown(
-            "<script>localStorage.removeItem('capcs_user_key');</script>",
-            unsafe_allow_html=True
-        )
+        # Flag tells the next render to remove localStorage instead of restoring from it
+        st.session_state["_skip_ls_restore"] = True
         st.rerun()
 
     st.divider()
@@ -284,7 +281,15 @@ if stored_uk and not st.session_state.get("user_key"):
 # This only runs when session state is already blank (timeout/reconnect), so
 # there is no session state to lose.
 if not st.session_state.get("user_key"):
-    st.markdown("""
+    if st.session_state.pop("_skip_ls_restore", False):
+        # User just cleared their data — actively remove the localStorage key in this
+        # render so the restoration check below cannot race and restore the old identity.
+        st.markdown(
+            "<script>localStorage.removeItem('capcs_user_key');</script>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown("""
 <script>
 (function() {
     const stored = localStorage.getItem('capcs_user_key');
@@ -362,20 +367,11 @@ if not st.session_state.get("user_key"):
                     if existing.data:
                         st.warning("This username + PIN combination already exists. Use the **Returning user** tab to log in, or choose a different combination.")
                     else:
-                        # Save user to Supabase immediately at registration
-                        try:
-                            sb.table("users").insert({
-                                "user_key": new_key,
-                                "display_name": display_name,
-                                "consent_given_at": None,
-                            }).execute()
-                        except Exception:
-                            try:
-                                sb.table("users").update({
-                                    "display_name": display_name,
-                                }).eq("user_key", new_key).execute()
-                            except Exception:
-                                pass
+                        # Upsert: works whether or not the row exists already
+                        sb.table("users").upsert({
+                            "user_key": new_key,
+                            "display_name": display_name,
+                        }, on_conflict="user_key").execute()
                         st.session_state.user_key = new_key
                         st.session_state.display_name = display_name
                         st.session_state.phase = "consent"
