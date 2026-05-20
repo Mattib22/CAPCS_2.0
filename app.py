@@ -120,6 +120,7 @@ defaults = {
     "_confidence_confirmed": False,
     "_ca_partial_mode": False,
     "_ca_partial_conf": None,
+    "_ca_pending_conf": None,
     "_conviction_suggestions": "",
 }
 for key, val in defaults.items():
@@ -147,6 +148,7 @@ with st.sidebar:
         st.session_state["_confidence_confirmed"] = False
         st.session_state["_ca_partial_mode"] = False
         st.session_state["_ca_partial_conf"] = None
+        st.session_state["_ca_pending_conf"] = None
         st.session_state["_conviction_suggestions"] = ""
         st.session_state.pop("_report_analysis", None)
         st.session_state.input_session_counter = st.session_state.get("input_session_counter", 0) + 1
@@ -1362,16 +1364,20 @@ elif st.session_state.phase == "challenge":
         scroll_to_chat_bottom()
 
         confidence_start = cd.get("confidence_start", 35)
-        # Reset partial mode if this is a fresh counterattack (no exchanges yet)
+        perspective_option = cd.get("perspective_text", "")
+
+        # Reset pending state on a fresh counterattack entry (no prior exchanges)
         if not cd.get("counterattack_exchanges"):
             ca_exchanges_exist = any(
-                r.get("round_state") == "counterattack_partial"
+                r.get("round_state") in ("counterattack_partial", "counterattack_rejected")
                 for r in cd.get("rounds_log", [])
             )
             if not ca_exchanges_exist:
                 st.session_state["_ca_partial_mode"] = False
                 st.session_state["_ca_partial_conf"] = None
-        ca_partial_mode = st.session_state.get("_ca_partial_mode", False)
+                st.session_state["_ca_pending_conf"] = None
+
+        ca_pending_conf = st.session_state.get("_ca_pending_conf", None)
 
         def _go_conviction_slider(conf_val):
             accepted_option = cd.get("perspective_text", "")
@@ -1408,11 +1414,63 @@ elif st.session_state.phase == "challenge":
             st.session_state["_confidence_after"] = conf_val
             st.session_state["_ca_partial_mode"] = False
             st.session_state["_ca_partial_conf"] = None
+            st.session_state["_ca_pending_conf"] = None
             st.session_state["_conviction_suggestions"] = ""
             st.rerun()
 
-        if not ca_partial_mode:
-            # Show confidence slider
+        def _go_rejected(conf_val):
+            bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
+            perspective = cd.get("perspective_text", "")
+            rejected_opts = list(cd.get("rejected_options", []))
+            rejected_biases = list(cd.get("rejected_biases", []))
+            if perspective and perspective not in rejected_opts:
+                rejected_opts.append(perspective)
+            conv_hist_r = list(cd.get("conversation_history", []))
+            conv_hist_r.append({"role": "user", "content": f"[confidence: {conf_val}% — option rejected]"})
+            new_round_r = cd.get("rounds", 0) + 1
+            rounds_log_r = list(cd.get("rounds_log", []))
+            rounds_log_r.append({
+                "round": new_round_r, "round_number": new_round_r,
+                "round_state": "counterattack_rejected",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": perspective, "question": "",
+                "conversation_message": cd.get("conversation_message", ""),
+                "followups": [], "answer": f"[confidence: {conf_val}%]",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": conf_val, "shift": 0, "confidence_shift": 0,
+            })
+            loop_ctx = (
+                f"Previously tried bias: '{bias_tried}'. "
+                f"Option proposed: '{perspective}'. "
+                f"User gave only {conf_val}% confidence — below their starting level. Option rejected. "
+                f"Explore a DIFFERENT angle."
+            )
+            st.session_state["_ca_partial_mode"] = False
+            st.session_state["_ca_partial_conf"] = None
+            st.session_state["_ca_pending_conf"] = None
+            st.session_state.current_decision = {
+                "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
+                "context": cd.get("context", ""), "options": cd["options"],
+                "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
+                "confidence_before": cd["confidence_before"], "confidence_start": cd["confidence_start"],
+                "timestamp": cd["timestamp"], "rounds": new_round_r,
+                "rounds_log": rounds_log_r,
+                "last_answer": f"[confidence: {conf_val}%]",
+                "conversation_history": conv_hist_r,
+                "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
+                "extra_listening": 2, "rejected_biases": rejected_biases,
+                "rejected_options": rejected_opts, "confirmed_bias": "",
+                "loop_context": loop_ctx, "answer_signals": {},
+                "counterattack_exchanges": [],
+            }
+            st.session_state.phase = "generating"
+            st.rerun()
+
+        # ── Phase 1: Slider ───────────────────────────────────────────────────
+        if ca_pending_conf is None:
             st.markdown("")
             conf_val = st.slider(
                 "How much does this feel like it could work for you?",
@@ -1423,122 +1481,144 @@ elif st.session_state.phase == "challenge":
             st.markdown("")
             if st.button("→ Submit", key=f"ca_conf_submit_{round_num}",
                          type="primary", use_container_width=True):
-                if conf_val >= CONFIDENCE_THRESHOLD:
-                    _go_conviction_slider(conf_val)
-                elif conf_val > confidence_start:
-                    # Partial: ask what part doesn't land
-                    st.session_state["_ca_partial_mode"] = True
-                    st.session_state["_ca_partial_conf"] = conf_val
-                    st.rerun()
+                if conf_val <= confidence_start:
+                    # Below starting confidence — option didn't land at all
+                    _go_rejected(conf_val)
                 else:
-                    # Rejected: option didn't land, back to listening
-                    bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
-                    perspective = cd.get("perspective_text", "")
-                    rejected_opts = list(cd.get("rejected_options", []))
-                    rejected_biases = list(cd.get("rejected_biases", []))
-                    if perspective and perspective not in rejected_opts:
-                        rejected_opts.append(perspective)
-                    conv_hist_r = cd.get("conversation_history", [])
-                    conv_hist_r.append({"role": "user", "content": f"[confidence: {conf_val}% — option rejected]"})
-                    new_round_r = cd.get("rounds", 0) + 1
-                    rounds_log_r = cd.get("rounds_log", [])
-                    rounds_log_r.append({
-                        "round": new_round_r, "round_number": new_round_r,
-                        "round_state": "counterattack_rejected",
-                        "timestamp": datetime.now().isoformat(),
-                        "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                        "perspective": perspective, "question": "",
-                        "conversation_message": cd.get("conversation_message", ""),
-                        "followups": [], "answer": f"[confidence: {conf_val}%]",
-                        "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                        "answer_key_signal": "", "shifted": False, "still_undecided": False,
-                        "how_shifted": "", "leaning": cd.get("leaning", ""),
-                        "confidence": conf_val, "shift": 0, "confidence_shift": 0,
-                    })
-                    loop_ctx = (
-                        f"Previously tried bias: '{bias_tried}'. "
-                        f"Option proposed: '{perspective}'. "
-                        f"User gave only {conf_val}% confidence — below their starting level. Option rejected. "
-                        f"Explore a DIFFERENT angle."
-                    )
-                    st.session_state["_ca_partial_mode"] = False
-                    st.session_state["_ca_partial_conf"] = None
-                    st.session_state.current_decision = {
-                        "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
-                        "context": cd.get("context", ""), "options": cd["options"],
-                        "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
-                        "confidence_before": cd["confidence_before"], "confidence_start": cd["confidence_start"],
-                        "timestamp": cd["timestamp"], "rounds": new_round_r,
-                        "rounds_log": rounds_log_r,
-                        "last_answer": f"[confidence: {conf_val}%]",
-                        "conversation_history": conv_hist_r,
-                        "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
-                        "extra_listening": 2, "rejected_biases": rejected_biases,
-                        "rejected_options": rejected_opts, "confirmed_bias": "",
-                        "loop_context": loop_ctx, "answer_signals": {},
-                        "counterattack_exchanges": [],
-                    }
-                    st.session_state.phase = "generating"
+                    # Store and show threshold message on next render
+                    st.session_state["_ca_pending_conf"] = conf_val
                     st.rerun()
+
+        # ── Phase 2: Threshold status + routing ───────────────────────────────
         else:
-            # Partial mode: ask what part doesn't fully land
-            with st.chat_message("assistant", avatar="🧑‍🏫"):
-                st.markdown("What part of that doesn't fully land for you?")
-            scroll_to_chat_bottom()
-            partial_reply = st.chat_input(
-                "What doesn't land?",
-                key=f"ca_partial_{round_num}"
-            )
-            if partial_reply and partial_reply.strip():
-                partial_answer = partial_reply.strip()
-                conf_val_p = st.session_state.get("_ca_partial_conf", confidence_start)
-                bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
-                perspective = cd.get("perspective_text", "")
-                conv_hist_p = cd.get("conversation_history", [])
-                conv_hist_p.append({"role": "assistant", "content": "What part of that doesn't fully land for you?"})
-                conv_hist_p.append({"role": "user", "content": partial_answer})
-                new_round_p = cd.get("rounds", 0) + 1
-                rounds_log_p = cd.get("rounds_log", [])
-                rounds_log_p.append({
-                    "round": new_round_p, "round_number": new_round_p,
-                    "round_state": "counterattack_partial",
-                    "timestamp": datetime.now().isoformat(),
-                    "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                    "perspective": perspective,
-                    "question": "What part of that doesn't fully land for you?",
-                    "conversation_message": cd.get("conversation_message", ""),
-                    "followups": [], "answer": partial_answer,
-                    "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                    "answer_key_signal": "", "shifted": False, "still_undecided": False,
-                    "how_shifted": "", "leaning": cd.get("leaning", ""),
-                    "confidence": conf_val_p, "shift": 0, "confidence_shift": 0,
-                })
-                loop_ctx = (
-                    f"Previously tried bias: '{bias_tried}'. "
-                    f"Option proposed: '{perspective}'. "
-                    f"User gave {conf_val_p}% confidence (partially convincing). "
-                    f"They said this didn't fully land: '{partial_answer}'. "
-                    f"Ask 1-2 questions, then spark again with a refined or different bias."
-                )
-                st.session_state["_ca_partial_mode"] = False
-                st.session_state["_ca_partial_conf"] = None
-                st.session_state.current_decision = {
-                    "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
-                    "context": cd.get("context", ""), "options": cd["options"],
-                    "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
-                    "confidence_before": cd["confidence_before"], "confidence_start": cd["confidence_start"],
-                    "timestamp": cd["timestamp"], "rounds": new_round_p,
-                    "rounds_log": rounds_log_p,
-                    "last_answer": partial_answer,
-                    "conversation_history": conv_hist_p,
-                    "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
-                    "extra_listening": 1, "rejected_biases": cd.get("rejected_biases", []),
-                    "rejected_options": cd.get("rejected_options", []), "confirmed_bias": "",
-                    "loop_context": loop_ctx, "answer_signals": {},
-                    "counterattack_exchanges": [],
-                }
-                st.session_state.phase = "generating"
-                st.rerun()
+            conf_val = ca_pending_conf
+
+            if conf_val >= CONFIDENCE_THRESHOLD:
+                # ── Above threshold — threshold reached ───────────────────────
+                with st.chat_message("assistant", avatar="🧑‍🏫"):
+                    st.markdown(
+                        f"You've reached your confidence threshold — you're at "
+                        f"**{conf_val}% clarity** about *{perspective_option}*."
+                    )
+                scroll_to_chat_bottom()
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("→ Continue", key=f"ca_above_continue_{round_num}",
+                                 type="primary", use_container_width=True):
+                        _go_conviction_slider(conf_val)
+                with col2:
+                    if st.button("Explore further", key=f"ca_above_explore_{round_num}",
+                                 use_container_width=True):
+                        # User wants to keep exploring despite crossing threshold
+                        bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
+                        perspective = cd.get("perspective_text", "")
+                        rej_biases = list(cd.get("rejected_biases", []))
+                        rej_opts = list(cd.get("rejected_options", []))
+                        if perspective and perspective not in rej_opts:
+                            rej_opts.append(perspective)
+                        if bias_tried and bias_tried not in rej_biases:
+                            rej_biases.append(bias_tried)
+                        loop_ctx = (
+                            f"Previously tried bias: '{bias_tried}'. "
+                            f"Option proposed: '{perspective}'. "
+                            f"User reached threshold ({conf_val}%) but chose to explore further. "
+                            f"Explore a DIFFERENT angle."
+                        )
+                        st.session_state["_ca_pending_conf"] = None
+                        new_cd_e = dict(cd)
+                        new_cd_e["capcs_state"] = "listening"
+                        new_cd_e["extra_listening"] = 2
+                        new_cd_e["confirmed_bias"] = ""
+                        new_cd_e["rejected_biases"] = rej_biases
+                        new_cd_e["rejected_options"] = rej_opts
+                        new_cd_e["loop_context"] = loop_ctx
+                        st.session_state.current_decision = new_cd_e
+                        st.session_state.phase = "generating"
+                        st.rerun()
+
+            else:
+                # ── Below threshold — partial (between confidence_start and threshold) ──
+                with st.chat_message("assistant", avatar="🧑‍🏫"):
+                    st.markdown(
+                        f"You haven't reached your confidence threshold yet — you're at "
+                        f"**{conf_val}%** (your threshold is **{CONFIDENCE_THRESHOLD}%**). "
+                        f"Are you happy with this option, or would you like to explore further?"
+                    )
+                scroll_to_chat_bottom()
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("I'm happy with this", key=f"ca_partial_happy_{round_num}",
+                                 type="primary", use_container_width=True):
+                        _go_conviction_slider(conf_val)
+                with col2:
+                    if st.button("Explore further", key=f"ca_partial_explore_{round_num}",
+                                 use_container_width=True):
+                        # Route to listening, ask what didn't land
+                        st.session_state["_ca_partial_mode"] = True
+                        st.session_state["_ca_partial_conf"] = conf_val
+                        st.rerun()
+
+                # If user clicked "Explore further", now ask what part didn't land
+                if st.session_state.get("_ca_partial_mode"):
+                    with st.chat_message("assistant", avatar="🧑‍🏫"):
+                        st.markdown("What part of that doesn't fully land for you?")
+                    scroll_to_chat_bottom()
+                    partial_reply = st.chat_input(
+                        "What doesn't land?",
+                        key=f"ca_partial_{round_num}"
+                    )
+                    if partial_reply and partial_reply.strip():
+                        partial_answer = partial_reply.strip()
+                        conf_val_p = st.session_state.get("_ca_partial_conf", confidence_start)
+                        bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
+                        perspective = cd.get("perspective_text", "")
+                        conv_hist_p = list(cd.get("conversation_history", []))
+                        conv_hist_p.append({"role": "assistant", "content": "What part of that doesn't fully land for you?"})
+                        conv_hist_p.append({"role": "user", "content": partial_answer})
+                        new_round_p = cd.get("rounds", 0) + 1
+                        rounds_log_p = list(cd.get("rounds_log", []))
+                        rounds_log_p.append({
+                            "round": new_round_p, "round_number": new_round_p,
+                            "round_state": "counterattack_partial",
+                            "timestamp": datetime.now().isoformat(),
+                            "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                            "perspective": perspective,
+                            "question": "What part of that doesn't fully land for you?",
+                            "conversation_message": cd.get("conversation_message", ""),
+                            "followups": [], "answer": partial_answer,
+                            "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                            "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                            "how_shifted": "", "leaning": cd.get("leaning", ""),
+                            "confidence": conf_val_p, "shift": 0, "confidence_shift": 0,
+                        })
+                        loop_ctx = (
+                            f"Previously tried bias: '{bias_tried}'. "
+                            f"Option proposed: '{perspective}'. "
+                            f"User gave {conf_val_p}% confidence (below threshold of {CONFIDENCE_THRESHOLD}%). "
+                            f"They said this didn't fully land: '{partial_answer}'. "
+                            f"Ask 1-2 questions, then spark again with a refined or different bias."
+                        )
+                        st.session_state["_ca_partial_mode"] = False
+                        st.session_state["_ca_partial_conf"] = None
+                        st.session_state["_ca_pending_conf"] = None
+                        st.session_state.current_decision = {
+                            "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
+                            "context": cd.get("context", ""), "options": cd["options"],
+                            "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
+                            "confidence_before": cd["confidence_before"], "confidence_start": cd["confidence_start"],
+                            "timestamp": cd["timestamp"], "rounds": new_round_p,
+                            "rounds_log": rounds_log_p,
+                            "last_answer": partial_answer,
+                            "conversation_history": conv_hist_p,
+                            "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
+                            "extra_listening": 1, "rejected_biases": cd.get("rejected_biases", []),
+                            "rejected_options": cd.get("rejected_options", []), "confirmed_bias": "",
+                            "loop_context": loop_ctx, "answer_signals": {},
+                            "counterattack_exchanges": [],
+                        }
+                        st.session_state.phase = "generating"
+                        st.rerun()
 
     # ══════════════════════════════════════════════════════════════════════════
     # STATE: COUNTERATTACK_REJECTED — ask why, then loop back to listening
@@ -1668,6 +1748,7 @@ elif st.session_state.phase == "challenge":
             st.session_state["_confidence_confirmed"] = False
             st.session_state["_ca_partial_mode"] = False
             st.session_state["_ca_partial_conf"] = None
+            st.session_state["_ca_pending_conf"] = None
             st.session_state["_conviction_suggestions"] = ""
             st.session_state.phase = "feedback"
             st.rerun()
