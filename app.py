@@ -1421,9 +1421,13 @@ elif st.session_state.phase == "challenge":
                 f"First, ask what part specifically didn't resonate. "
                 f"After 2 answers, spark again with a refined or different bias."
             )
+            rejected_partial = list(cd.get("rejected_biases", []))
+            if bias_name_short and bias_name_short not in rejected_partial:
+                rejected_partial.append(bias_name_short)
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
+            new_cd["rejected_biases"] = rejected_partial
             new_cd["extra_listening"] = 2
             new_cd["capcs_state"] = "listening"
             new_cd["loop_context"] = loop_ctx
@@ -1748,76 +1752,6 @@ elif st.session_state.phase == "challenge":
                         st.session_state["_ca_explore_above"] = False
                         st.rerun()
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # STATE: COUNTERATTACK_REJECTED — ask why, then loop back to listening
-    # ══════════════════════════════════════════════════════════════════════════
-    elif capcs_state == "counterattack_rejected":
-        with st.chat_message("assistant", avatar="🧑‍🏫"):
-            st.markdown("What specifically doesn't work about it?")
-        scroll_to_chat_bottom()
-
-        why_not = st.chat_input("What doesn't work?", key=f"ca_reject_{round_num}")
-        if why_not and why_not.strip():
-            answer = why_not.strip()
-            bias_tried   = cd.get("bias_text", "").split("—")[0].strip()[:60]
-            perspective  = cd.get("perspective_text", "")
-            conv_hist = cd.get("conversation_history", [])
-            conv_hist.append({"role": "user", "content": answer})
-            new_round = cd.get("rounds", 0) + 1
-            rounds_log = cd.get("rounds_log", [])
-            rejected_opts = cd.get("rejected_options", [])
-            rejected_biases = cd.get("rejected_biases", [])
-            if perspective and perspective not in rejected_opts:
-                rejected_opts.append(perspective)
-            # Keep the bias in rejected_biases so spark doesn't re-use it
-            if bias_tried and bias_tried not in rejected_biases:
-                rejected_biases.append(bias_tried)
-            rounds_log.append({
-                "round": new_round, "round_number": new_round,
-                "round_state": "counterattack_rejected",
-                "timestamp": datetime.now().isoformat(),
-                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                "perspective": perspective, "question": "",
-                "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": answer,
-                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                "answer_key_signal": "", "shifted": False, "still_undecided": False,
-                "how_shifted": "", "leaning": cd.get("leaning", ""),
-                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
-            })
-            loop_ctx = (
-                f"Previously tried bias: '{bias_tried}'. "
-                f"Option proposed: '{perspective}'. "
-                f"User said it doesn't work because: '{answer}'. "
-                f"Explore a DIFFERENT angle — do not revisit this bias or option."
-            )
-            st.session_state.current_decision = {
-                "decision": cd["decision"],
-                "decision_short": cd.get("decision_short", ""),
-                "context": cd.get("context", ""),
-                "options": cd["options"],
-                "leaning": cd.get("leaning", ""),
-                "is_undecided": cd.get("is_undecided", False),
-                "confidence_before": cd["confidence_before"],
-                "confidence_start": cd["confidence_start"],
-                "timestamp": cd["timestamp"],
-                "rounds": new_round,
-                "rounds_log": rounds_log,
-                "last_answer": answer,
-                "conversation_history": conv_hist,
-                "capcs_state": "listening",
-                "listening_answers": cd.get("listening_answers", 0),
-                "extra_listening": 2,
-                "rejected_biases": rejected_biases,
-                "rejected_options": rejected_opts,
-                "confirmed_bias": "",
-                "loop_context": loop_ctx,
-                "answer_signals": {},
-                "counterattack_exchanges": [],
-                "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
-            }
-            st.session_state.phase = "generating"
-            st.rerun()
 
     # ══════════════════════════════════════════════════════════════════════════
     # STATE: CONVICTION
