@@ -1357,7 +1357,7 @@ elif st.session_state.phase == "challenge":
                 f"Bias identified: '{bias_name_short}'. "
                 f"User said it PARTIALLY resonated. "
                 f"First, ask what part specifically didn't resonate. "
-                f"After 1-2 answers, spark again with a refined or different bias."
+                f"After 2 answers, spark again with a refined or different bias."
             )
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
@@ -1636,7 +1636,7 @@ elif st.session_state.phase == "challenge":
                             f"Option proposed: '{perspective}'. "
                             f"User gave {conf_val_p}% confidence (below threshold of {CONFIDENCE_THRESHOLD}%). "
                             f"They said this didn't fully land: '{partial_answer}'. "
-                            f"Ask 1-2 questions, then spark again with a refined or different bias."
+                            f"Ask 2 questions to gather new signal, then spark again with a refined or different bias."
                         )
                         st.session_state["_ca_partial_mode"] = False
                         st.session_state["_ca_partial_conf"] = None
@@ -1651,7 +1651,7 @@ elif st.session_state.phase == "challenge":
                             "last_answer": partial_answer,
                             "conversation_history": conv_hist_p,
                             "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
-                            "extra_listening": 1, "rejected_biases": cd.get("rejected_biases", []),
+                            "extra_listening": 2, "rejected_biases": cd.get("rejected_biases", []),
                             "rejected_options": cd.get("rejected_options", []), "confirmed_bias": "",
                             "loop_context": loop_ctx, "answer_signals": {},
                             "counterattack_exchanges": [],
