@@ -1038,6 +1038,51 @@ def extract_counterattack_signal(response: str) -> dict:
         return default
 
 
+def get_partial_probe(option_proposed: str, confirmed_bias: str,
+                       conversation_history: list, profile_str: str) -> str:
+    """
+    When the user's confidence lands below the threshold or they say 'Partially',
+    ask a psychologist-style question that surfaces what's blocking internally —
+    not just what 'doesn't work' logistically.
+    """
+    history_text = "\n".join([
+        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history
+    ])
+    prompt = f"""The user has just evaluated an option with partial confidence. They haven't fully rejected it, but something isn't landing.
+
+OPTION PROPOSED: {option_proposed}
+CONFIRMED BIAS: {confirmed_bias}
+
+Your job: ask ONE question that helps the user surface what's happening inside them — not a logistical objection, but an internal resistance, a fear, an assumption, or a value conflict.
+
+The answer is probably already inside them — it may just be unconscious. Your question should make it visible, not ask them to evaluate or justify.
+
+Rules:
+- Max 30 words
+- One question only, ends with ?
+- Do NOT ask about facts, logistics, or external constraints
+- Do NOT say "what doesn't work" — that frames it as a practical problem
+- Ask about feelings, meanings, fears, or what feels threatening about the option
+- Speak warmly, like a psychologist who is genuinely curious
+
+Examples of the right tone:
+✓ "What would it cost you personally to go in that direction?"
+✓ "What are you protecting by not fully committing to this?"
+✓ "What feeling comes up when you imagine actually doing it?"
+✗ "What specifically doesn't work about this option?" (too logistical)
+✗ "Can you explain your hesitation?" (too generic)
+
+FULL CONVERSATION:
+{history_text}
+
+PROFILE:
+{profile_str}
+
+Output only the question."""
+    return ask_ai(prompt, 200)
+
+
 def get_personalised_suggestions(final_choice: str, confirmed_bias: str,
                                    profile_str: str, what_shifted: str = "") -> str:
     """Conviction state: warm closing with 2-3 personalised concrete directions."""

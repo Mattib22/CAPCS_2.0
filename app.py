@@ -21,7 +21,7 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
                          get_session_recommendation, get_bias_analysis, classify_domain, infer_options,
                          get_spark_message, extract_spark_fields, has_enough_signal,
                          get_counterattack_followup, extract_counterattack_signal,
-                         get_personalised_suggestions)
+                         get_personalised_suggestions, get_partial_probe)
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
@@ -123,6 +123,7 @@ defaults = {
     "_ca_pending_conf": None,
     "_conviction_suggestions": "",
     "_listening_clarification": None,
+    "_partial_probe_question": "",
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -1597,22 +1598,33 @@ elif st.session_state.phase == "challenge":
                         st.session_state["_ca_partial_conf"] = conf_val
                         st.rerun()
 
-                # If user clicked "Explore further", now ask what part didn't land
+                # If user clicked "Explore further", probe what's blocking internally
                 if st.session_state.get("_ca_partial_mode"):
+                    probe_q = st.session_state.get("_partial_probe_question", "")
+                    if not probe_q:
+                        with st.spinner(""):
+                            probe_q = get_partial_probe(
+                                cd.get("perspective_text", ""),
+                                cd.get("confirmed_bias", "") or cd.get("bias_text", ""),
+                                cd.get("conversation_history", []),
+                                enriched_profile_str
+                            ) or "What's coming up for you when you imagine actually going with this?"
+                        st.session_state["_partial_probe_question"] = probe_q
                     with st.chat_message("assistant", avatar="🧑‍🏫"):
-                        st.markdown("What part of that doesn't fully land for you?")
+                        st.markdown(probe_q)
                     scroll_to_chat_bottom()
                     partial_reply = st.chat_input(
-                        "What doesn't land?",
+                        "What's coming up for you?",
                         key=f"ca_partial_{round_num}"
                     )
                     if partial_reply and partial_reply.strip():
                         partial_answer = partial_reply.strip()
+                        st.session_state["_partial_probe_question"] = ""
                         conf_val_p = st.session_state.get("_ca_partial_conf", confidence_start)
                         bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
                         perspective = cd.get("perspective_text", "")
                         conv_hist_p = list(cd.get("conversation_history", []))
-                        conv_hist_p.append({"role": "assistant", "content": "What part of that doesn't fully land for you?"})
+                        conv_hist_p.append({"role": "assistant", "content": probe_q})
                         conv_hist_p.append({"role": "user", "content": partial_answer})
                         new_round_p = cd.get("rounds", 0) + 1
                         rounds_log_p = list(cd.get("rounds_log", []))
@@ -1622,7 +1634,7 @@ elif st.session_state.phase == "challenge":
                             "timestamp": datetime.now().isoformat(),
                             "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
                             "perspective": perspective,
-                            "question": "What part of that doesn't fully land for you?",
+                            "question": probe_q,
                             "conversation_message": cd.get("conversation_message", ""),
                             "followups": [], "answer": partial_answer,
                             "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
@@ -1640,6 +1652,7 @@ elif st.session_state.phase == "challenge":
                         st.session_state["_ca_partial_mode"] = False
                         st.session_state["_ca_partial_conf"] = None
                         st.session_state["_ca_pending_conf"] = None
+                        st.session_state["_partial_probe_question"] = ""
                         st.session_state.current_decision = {
                             "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
                             "context": cd.get("context", ""), "options": cd["options"],
