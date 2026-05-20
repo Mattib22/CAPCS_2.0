@@ -1613,6 +1613,12 @@ elif st.session_state.phase == "challenge":
             conf_val = ca_pending_conf
             explore_above = st.session_state.get("_ca_explore_above", False)
 
+            # Always show the option at the top of Phase 2 so it stays visible
+            option_msg = conversation_msg or cd.get("perspective_text", "")
+            if option_msg:
+                with st.chat_message("assistant", avatar="🧑‍🏫"):
+                    st.markdown(option_msg)
+
             # ── Probe first if user clicked "Explore further" (above OR below threshold) ──
             if st.session_state.get("_ca_partial_mode"):
                 probe_q = st.session_state.get("_partial_probe_question", "")
