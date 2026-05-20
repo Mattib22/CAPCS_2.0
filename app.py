@@ -1171,7 +1171,7 @@ elif st.session_state.phase == "challenge":
                 st.markdown(clarification_state["capcs_reply"])
             scroll_to_chat_bottom()
             real_input = st.chat_input(
-                "Respond, think out loud...",
+                "Respond, think out loud... or ask a question if something isn't clear",
                 key=f"chat_clarify_{round_num}"
             )
             if real_input and real_input.strip():
@@ -1181,7 +1181,7 @@ elif st.session_state.phase == "challenge":
                 conv_hist.append({"role": "user", "content": answer})
         else:
             inline_answer = st.chat_input(
-                "Respond, think out loud...",
+                "Respond, think out loud... or ask a question if something isn't clear",
                 key=f"chat_listen_{round_num}"
             )
             if inline_answer and inline_answer.strip():
