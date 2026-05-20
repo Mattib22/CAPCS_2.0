@@ -122,6 +122,7 @@ defaults = {
     "_ca_partial_conf": None,
     "_ca_pending_conf": None,
     "_conviction_suggestions": "",
+    "_listening_clarification": None,
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -150,6 +151,7 @@ with st.sidebar:
         st.session_state["_ca_partial_conf"] = None
         st.session_state["_ca_pending_conf"] = None
         st.session_state["_conviction_suggestions"] = ""
+        st.session_state["_listening_clarification"] = None
         st.session_state.pop("_report_analysis", None)
         st.session_state.input_session_counter = st.session_state.get("input_session_counter", 0) + 1
         st.rerun()
@@ -1135,17 +1137,66 @@ elif st.session_state.phase == "challenge":
         if not conversation_msg:
             st.session_state.phase = "generating"; st.rerun()
 
-        inline_answer = st.chat_input(
-            "Respond, think out loud...",
-            key=f"chat_listen_{round_num}"
-        )
-        if inline_answer and inline_answer.strip():
-            answer = inline_answer.strip()
-            conv_hist = cd.get("conversation_history", [])
-            conv_hist.append({"role": "user", "content": answer})
+        # ── Clarification exchange: user asked a question, CAPCS clarified ────
+        clarification_state = st.session_state.get("_listening_clarification")
+        answer = None
 
-            with st.spinner(""):
-                signals = analyse_answer_quality(answer, cd.get("question_text", ""))
+        if clarification_state:
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(clarification_state["user_q"])
+            with st.chat_message("assistant", avatar="🧑‍🏫"):
+                st.markdown(clarification_state["capcs_reply"])
+            scroll_to_chat_bottom()
+            real_input = st.chat_input(
+                "Respond, think out loud...",
+                key=f"chat_clarify_{round_num}"
+            )
+            if real_input and real_input.strip():
+                st.session_state["_listening_clarification"] = None
+                answer = real_input.strip()
+                conv_hist = cd.get("conversation_history", [])
+                conv_hist.append({"role": "user", "content": answer})
+        else:
+            inline_answer = st.chat_input(
+                "Respond, think out loud...",
+                key=f"chat_listen_{round_num}"
+            )
+            if inline_answer and inline_answer.strip():
+                raw = inline_answer.strip()
+                if is_followup_question(raw):
+                    # User asked a question — clarify without advancing state
+                    with st.spinner(""):
+                        clarification = get_followup_answer(
+                            cd.get("conversation_message", ""),
+                            raw,
+                            cd.get("decision", ""),
+                            enriched_profile_str,
+                            "\n".join(
+                                f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+                                for m in cd.get("conversation_history", [])
+                            )
+                        )
+                    conv_h = list(cd.get("conversation_history", []))
+                    conv_h.append({"role": "user", "content": raw})
+                    conv_h.append({"role": "assistant", "content": clarification})
+                    new_cd = dict(cd)
+                    new_cd["conversation_history"] = conv_h
+                    st.session_state.current_decision = new_cd
+                    st.session_state["_listening_clarification"] = {
+                        "user_q": raw,
+                        "capcs_reply": clarification,
+                    }
+                    st.rerun()
+                answer = raw
+                conv_hist = cd.get("conversation_history", [])
+                conv_hist.append({"role": "user", "content": answer})
+
+        if answer is None:
+            st.stop()
+
+        # ── Normal answer processing ──────────────────────────────────────────
+        with st.spinner(""):
+            signals = analyse_answer_quality(answer, cd.get("question_text", ""))
 
             listening_answers = cd.get("listening_answers", 0) + 1
             extra_listening = cd.get("extra_listening", 0)
@@ -1485,8 +1536,9 @@ elif st.session_state.phase == "challenge":
                 # ── Above threshold — threshold reached ───────────────────────
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(
-                        f"You've reached your confidence threshold — you're at "
-                        f"**{conf_val}% clarity** about *{perspective_option}*."
+                        f"You're at **{conf_val}% confidence** — that feels like enough "
+                        f"clarity to move forward with *{perspective_option}*. "
+                        f"Ready to continue, or would you like to keep exploring?"
                     )
                 scroll_to_chat_bottom()
                 col1, col2 = st.columns(2)
@@ -1528,9 +1580,8 @@ elif st.session_state.phase == "challenge":
                 # ── Below threshold — partial (between confidence_start and threshold) ──
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(
-                        f"You haven't reached your confidence threshold yet — you're at "
-                        f"**{conf_val}%** (your threshold is **{CONFIDENCE_THRESHOLD}%**). "
-                        f"Are you happy with this option, or would you like to explore further?"
+                        f"You're at **{conf_val}% confidence** with this option. "
+                        f"Does that feel like enough to move forward, or would you like to explore further?"
                     )
                 scroll_to_chat_bottom()
 
