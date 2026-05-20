@@ -255,9 +255,9 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
 
 Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
 1. REFLECT (1 sentence): Name what the bias is doing to their thinking right now — do NOT open with a quote or paraphrase of their words. Do not start with "Your feeling that '...'", "When you said '...'", or any echo opener. Describe the pattern directly: e.g. "There's a pull here to treat X as the only path to Y."
-2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. End with this evaluation question only: "Does this feel like something that could actually work for you, or does something feel off?" Do NOT ask a planning question.
+2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. Do NOT ask a question at the end — a confidence slider will follow your message.
 
-Tone: warm, direct. Final sentence must end with a question mark."""
+Tone: warm, direct."""
 
     if confirmed_instruction:
         prompt = f"""You are a thinking partner helping someone work through a real decision.
@@ -280,7 +280,6 @@ After your conversational message, output this block exactly as shown — this i
 BIAS: [bias name only — max 6 words]
 EXPLANATION: [what this bias is and why it appeared — max 40 words]
 PERSPECTIVE: [the option you proposed — max 8 words, no punctuation]
-QUESTION: Does this feel like something that could actually work for you, or does something feel off?
 ---END---"""
         return ask_ai(prompt, 4096)
 
@@ -1000,3 +999,29 @@ def extract_counterattack_signal(response: str) -> dict:
         return {"message": message, "route": route}
     except Exception:
         return default
+
+
+def get_personalised_suggestions(final_choice: str, confirmed_bias: str,
+                                   profile_str: str, what_shifted: str = "") -> str:
+    """Conviction state: warm closing with 2-3 personalised concrete directions."""
+    shifted_section = f"\nUSER SAID WHAT SHIFTED: {what_shifted}" if what_shifted else ""
+    prompt = f"""You are closing a decision-making session. The user has landed on their choice after working through a cognitive bias.
+
+Write a warm, specific closing message that does two things:
+1. Opening (1 sentence): Acknowledge what just happened — name the choice and what it means for this specific person given their profile.
+2. Suggestions (2-3 bullet points): Concrete next directions given their final choice, the bias that was identified, and their profile. Each bullet must be specific to their situation — not generic advice.
+
+Format:
+[Opening sentence]
+
+- [Concrete direction 1 — specific to their profile/situation]
+- [Concrete direction 2 — specific to their profile/situation]
+- [Concrete direction 3 — optional, only if genuinely different and useful]
+
+Max 100 words total. Second person, warm. No hollow affirmations. Every direction must name something specific to this person.
+
+FINAL CHOICE: {final_choice}
+CONFIRMED BIAS: {confirmed_bias}{shifted_section}
+PROFILE:
+{profile_str}"""
+    return ask_ai(prompt, 4000)
