@@ -1123,8 +1123,10 @@ elif st.session_state.phase == "challenge":
                 st.markdown(ans)
 
     # ── Current CASPER message ────────────────────────────────────────────────
+    # Counterattack message is rendered inside the counterattack state block
+    # (immediately above the slider) so the user always sees it.
     conversation_msg = cd.get("conversation_message", "")
-    if conversation_msg and capcs_state != "conviction":
+    if conversation_msg and capcs_state not in ("conviction", "counterattack"):
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(conversation_msg)
 
@@ -1508,8 +1510,13 @@ elif st.session_state.phase == "challenge":
             st.session_state.phase = "generating"
             st.rerun()
 
-        # ── Phase 1: Slider ───────────────────────────────────────────────────
+        # ── Phase 1: Option + Slider ─────────────────────────────────────────
         if ca_pending_conf is None:
+            # Show the counterattack option right above the slider
+            option_msg = conversation_msg or cd.get("perspective_text", "")
+            if option_msg:
+                with st.chat_message("assistant", avatar="🧑‍🏫"):
+                    st.markdown(option_msg)
             st.markdown("")
             conf_val = st.slider(
                 "How much does this feel like it could work for you?",
