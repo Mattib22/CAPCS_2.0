@@ -2,6 +2,7 @@
 
 import streamlit as st
 import os
+import random
 import google.generativeai as genai
 import json
 import re
@@ -30,6 +31,31 @@ DIMENSION 3 — Distortions in what the user assumes:
 - Anchoring Bias: over-relying on one reference point for all subsequent judgment
 - Social Proof Bias: deciding based on what others are doing, not on personal values
 """
+
+
+def _shuffled_dimensions() -> str:
+    """Return CASPER_DIMENSIONS with dimensions and biases in randomised order.
+    Prevents the model from anchoring on the first-listed biases every call."""
+    sections = []
+    current_header = None
+    current_biases = []
+    for line in CASPER_DIMENSIONS.strip().splitlines():
+        if line.startswith("DIMENSION"):
+            if current_header:
+                random.shuffle(current_biases)
+                sections.append((current_header, current_biases))
+            current_header = line
+            current_biases = []
+        elif line.startswith("-"):
+            current_biases.append(line)
+    if current_header:
+        random.shuffle(current_biases)
+        sections.append((current_header, current_biases))
+    random.shuffle(sections)
+    return "\n".join(
+        header + "\n" + "\n".join(biases)
+        for header, biases in sections
+    )
 
 
 def _get_api_key():
@@ -684,8 +710,14 @@ Read the FULL conversation carefully — not just the last message. Identify whi
 - DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
 
 Then select ONE bias from the taxonomy below that best explains the pattern across the FULL conversation.
+
+IMPORTANT — bias selection discipline:
+- Consider ALL 15 biases before deciding. Do not stop at the first plausible one.
+- Commonly discussed biases (Loss Aversion, Sunk Cost Fallacy, Status Quo Bias) are often chosen by default — only pick them if they are genuinely the strongest fit, not because they are familiar.
+- Look for the bias that best explains the SPECIFIC pattern in THIS conversation, not the most general one.
+- The taxonomy is presented in random order deliberately — treat each bias with equal weight.
 {rejected_note}
-{CASPER_DIMENSIONS}
+{_shuffled_dimensions()}
 
 If no bias from this list is clearly earned from the full conversation, respond with exactly:
 SIGNAL_INSUFFICIENT

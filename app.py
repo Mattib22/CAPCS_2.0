@@ -1286,8 +1286,6 @@ elif st.session_state.phase == "challenge":
             st.session_state.phase = "generating"; st.rerun()
 
         uk = user_key_corr
-        existing_corrections = load_bias_corrections(uk) if uk else {}
-        existing_corr = existing_corrections.get(bias_name_short, {})
 
         # Always-visible section — not a collapsed expander
         with st.container(border=True):
@@ -1295,12 +1293,6 @@ elif st.session_state.phase == "challenge":
             if bias_name_short:
                 st.markdown(f"**{bias_name_short}**")
             st.markdown(cd.get("explanation_text", ""))
-            if existing_corr:
-                prev = {
-                    "accurate": "✅ confirmed", "inaccurate": "❌ didn't fit",
-                    "partial": "🔶 partially"
-                }.get(existing_corr.get("verdict", ""), "")
-                st.caption(f"Previously marked: {prev} — update:")
             kb = f"spark_{bias_name_short[:15].replace(' ','_')}_{round_num}"
             col1, col2, col3 = st.columns(3)
             with col1:
