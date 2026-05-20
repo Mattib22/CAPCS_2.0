@@ -202,38 +202,52 @@ def get_probing_question(decision, options, leaning, confidence, profile_str,
                           history, last_answer, context, longitudinal="", turn_num=2,
                           loop_context=""):
     """
-    Turns 2 through PROBE_TURNS: pure Socratic probing — understand the user's thinking.
-    No bias named. Forms hypothesis internally but says nothing.
+    Loop-back probing question. When loop_context is set, the AI must narrow in on
+    the specific contradiction or gap already revealed — not open new territory.
     """
     long_section = f"\n{longitudinal}" if longitudinal else ""
-    prompt = f"""You are a thinking partner on turn {turn_num} of a conversation. You have been listening carefully.
 
-Your hidden goal: build a diagnostic picture — across the full range of known cognitive biases — of which bias is most active in this person's thinking. You are a diagnostician. You do not reveal this. You ask questions that feel natural, but each one is specifically designed to surface or rule out a hypothesis about a specific bias.
+    if loop_context:
+        # ── Loop-back pass: narrow in on the specific gap already revealed ────
+        focus_instruction = f"""CONTEXT FROM PREVIOUS LOOP:
+{loop_context}
 
-Your job this turn: refine your hypothesis based on what they just said, then ask ONE question that goes deeper into the most likely active bias.
+You are NOT exploring fresh territory. The previous loop already revealed a specific tension, hesitation, or contradiction. Your job now is to NARROW IN on that specific gap — ask a question that goes directly into the heart of what's blocking resolution.
 
-How to choose your question:
-- Re-read everything in the conversation so far. What bias pattern is becoming clearer?
-- Form or update your hypothesis. Draw on the full range of cognitive biases you know — there are over 100. Do not limit yourself to obvious ones.
-- Ask the question that gives you the clearest evidence. It should be specific to your hypothesis — not a generic open question that could apply to anything.
+Do NOT ask a general question about feelings or life in broad terms.
+Do NOT ask about new topics.
+DO ask the question that makes the specific contradiction visible — the one the user is probably already aware of but hasn't fully faced.
+
+The question should feel like: "you've been circling this, let me name what you're circling."
+
+Examples of narrowing in (not opening up):
+✓ "You said adventure matters but also security — what does it mean that you can't currently imagine having both?"
+✓ "What would it mean to you if staying turned out to be the right choice?"
+✗ "What part of this chapter of life would you feel most incomplete about?" (too broad — opens new territory)
+✗ "What matters most to you right now?" (Q1-style — already done)"""
+    else:
+        # ── Standard diagnostic probe ─────────────────────────────────────────
+        focus_instruction = """Your hidden goal: build a diagnostic picture of which cognitive bias is most active. You do not reveal this. Each question is designed to surface or rule out a specific hypothesis.
+
+Your job this turn: re-read the full conversation. What pattern is becoming clearer? What contradiction has the user not yet confronted? Ask the question that gives you the sharpest evidence — not a generic open question.
 
 What makes a good diagnostic question:
-- It probes the specific mental mechanism you suspect — not feelings in general
-- It uses their exact words or images back to them
-- It asks something they haven't considered, or something that would reveal a contradiction
-- It cannot be answered with facts or logistics
+- It probes the specific mental mechanism you suspect, not feelings in general
+- It reveals a contradiction or assumption the user hasn't examined
+- It cannot be answered with facts or logistics"""
 
-Build DIRECTLY on their last answer — but do not echo their words back at the start. Jump straight to the question. Do NOT open with "You mentioned", "You said", "You told me", or any paraphrase of their answer.
+    prompt = f"""You are a psychologist-style thinking partner. You have been listening carefully.
 
-Rules:
+{focus_instruction}
+
+Rules (apply always):
 - One question only, max 35 words, ends with ?
 - Cannot be answered yes/no
 - Do NOT name any bias, pattern, or psychological concept
 - Do NOT ask about facts, logistics, or activities
-- Do NOT start with "You mentioned", "You said", or any variant
-- Warm, direct, curious — speaks to what is happening inside them, not around them
+- Do NOT open with "You mentioned", "You said", "You told me", or any echo of their words
+- Warm, direct, curious — speaks to what is happening inside them
 
-{f"IMPORTANT — THIS IS A SECOND PASS THROUGH THE CONVERSATION:{chr(10)}{loop_context}{chr(10)}Ask questions that open a genuinely different angle from what was already tried.{chr(10)}" if loop_context else ""}
 CONVERSATION HISTORY:
 {history}
 
