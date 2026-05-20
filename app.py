@@ -21,7 +21,8 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
                          get_session_recommendation, get_bias_analysis, classify_domain, infer_options,
                          get_spark_message, extract_spark_fields, has_enough_signal,
                          get_counterattack_followup, extract_counterattack_signal,
-                         get_personalised_suggestions, get_partial_probe)
+                         get_personalised_suggestions, get_partial_probe,
+                         identify_candidate_biases, get_disambiguation_question)
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_history, build_longitudinal_context, QUESTIONS)
 from ui_helpers import (confidence_color, badge, label, box, thinking_animation,
@@ -125,6 +126,7 @@ defaults = {
     "_listening_clarification": None,
     "_partial_probe_question": "",
     "_ca_explore_above": False,
+    "_recently_used_biases": [],
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -889,6 +891,9 @@ elif st.session_state.phase == "input":
                 "rejected_options": [],
                 "confirmed_bias": "",
                 "counterattack_exchanges": [],
+                "pre_identified_bias": "",
+                "disambiguation_question": "",
+                "bias_candidates": [],
             }
             st.session_state.sub_state = "present"
             st.session_state.followup_exchanges = []
@@ -916,6 +921,14 @@ elif st.session_state.phase == "generating":
         past_sessions = load_log()
         past_completed = [h for h in past_sessions if h.get("completed_at")]
         st.session_state.longitudinal_text = build_longitudinal_context(past_completed)
+        # Extract biases used in the last 3 completed sessions for longitudinal diversity
+        recent_biases = list(dict.fromkeys(
+            r.get("bias", "").split("—")[0].strip()
+            for s in past_completed[-3:]
+            for r in s.get("rounds_log", [])
+            if r.get("bias") and r.get("round_state") in ("spark", "counterattack")
+        ))
+        st.session_state["_recently_used_biases"] = [b for b in recent_biases if b]
     longitudinal_text = st.session_state.longitudinal_text or ""
 
     rounds_log_so_far = cd.get("rounds_log", [])
@@ -974,12 +987,14 @@ elif st.session_state.phase == "generating":
 
         if capcs_state == "listening":
             if sustained_drop and listening_answers >= 2:
-                # User's certainty has been consistently low — stop challenging,
-                # ask one grounding question to consolidate what they already know.
                 message = get_consolidation_question(
                     cd["decision"], cd.get("leaning", ""),
                     rounds_log_so_far, enriched_profile_str, history_text
                 )
+            elif cd.get("disambiguation_question"):
+                # Pre-generated disambiguation question — use directly, then clear
+                message = cd["disambiguation_question"]
+                cd["disambiguation_question"] = ""
             elif cd.get("extra_listening", 0) > 0:
                 # Loop-back turn: use probing question with loop context
                 message = get_probing_question(
@@ -990,7 +1005,7 @@ elif st.session_state.phase == "generating":
                     loop_context=cd.get("loop_context", "")
                 )
             else:
-                # Initial Q1/Q2/Q3: opening question determines which to ask via history
+                # Initial Q1/Q2/Q3
                 message = get_opening_question(
                     cd["decision"], cd["options"],
                     cd["confidence_before"], enriched_profile_str,
@@ -1011,7 +1026,9 @@ elif st.session_state.phase == "generating":
                 cd.get("conversation_history", []),
                 enriched_profile_str,
                 context,
-                cd.get("rejected_biases", [])
+                cd.get("rejected_biases", []),
+                recently_used_biases=st.session_state.get("_recently_used_biases", []),
+                pre_identified_bias=cd.get("pre_identified_bias", "")
             )
             fields = extract_spark_fields(spark_response)
             message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
@@ -1231,17 +1248,69 @@ elif st.session_state.phase == "challenge":
             if new_opt and new_opt not in st.session_state.all_options:
                 st.session_state.all_options.append(new_opt)
 
-            # Decide next state
+            # ── Inductive bias identification ─────────────────────────────────
+            pre_identified = cd.get("pre_identified_bias", "")
+
             if extra_listening > 0:
                 new_extra = extra_listening - 1
-                next_state = "spark" if new_extra == 0 else "listening"
-            elif listening_answers >= 3:
-                next_state = "spark"
-                new_extra = 0
+                if new_extra == 0:
+                    # Disambiguation answer received — run final identification
+                    with st.spinner(""):
+                        final_cands = identify_candidate_biases(
+                            conv_hist, enriched_profile_str, context
+                        )
+                    if final_cands:
+                        pre_identified = final_cands[0]["bias"]
+                    next_state = "spark"
+                else:
+                    next_state = "listening"
+
             elif listening_answers >= 2:
                 with st.spinner(""):
-                    next_state = "spark" if has_enough_signal(conv_hist) else "listening"
-                new_extra = 0
+                    candidates = identify_candidate_biases(
+                        conv_hist, enriched_profile_str, context
+                    )
+
+                if listening_answers >= 3:
+                    # Hard stop — spark regardless
+                    if candidates:
+                        pre_identified = candidates[0]["bias"]
+                    next_state = "spark"
+                    new_extra = 0
+                    cd["disambiguation_question"] = ""
+
+                elif candidates:
+                    top = candidates[0]
+                    second = candidates[1] if len(candidates) > 1 else None
+                    gap = top["score"] - second["score"] if second else 10
+
+                    if top["score"] >= 7 and gap >= 3:
+                        # Clear winner — go to spark
+                        pre_identified = top["bias"]
+                        next_state = "spark"
+                        new_extra = 0
+                        cd["disambiguation_question"] = ""
+                    else:
+                        # Ambiguous — ask one targeted disambiguation question
+                        if second:
+                            with st.spinner(""):
+                                disambig_q = get_disambiguation_question(
+                                    top, second,
+                                    conv_hist, enriched_profile_str,
+                                    cd["decision"], context
+                                ) or ""
+                        else:
+                            disambig_q = ""
+                        cd["disambiguation_question"] = disambig_q
+                        cd["bias_candidates"] = candidates[:2]
+                        next_state = "listening"
+                        new_extra = 1
+
+                else:
+                    # No candidates — continue to Q3
+                    next_state = "listening"
+                    new_extra = 0
+
             else:
                 next_state = "listening"
                 new_extra = 0
@@ -1267,8 +1336,6 @@ elif st.session_state.phase == "challenge":
                 "rejected_options": cd.get("rejected_options", []),
                 "confirmed_bias": cd.get("confirmed_bias", ""),
                 "answer_signals": signals,
-                # Preserve loop-back context and current AI state so they survive
-                # across multiple listening turns in a rejected-bias loop.
                 "loop_context": cd.get("loop_context", ""),
                 "bias_text": cd.get("bias_text", ""),
                 "explanation_text": cd.get("explanation_text", ""),
@@ -1276,6 +1343,10 @@ elif st.session_state.phase == "challenge":
                 "perspective_option": cd.get("perspective_option", ""),
                 "question_text": cd.get("question_text", ""),
                 "conversation_message": cd.get("conversation_message", ""),
+                # Inductive bias identification fields
+                "pre_identified_bias": pre_identified,
+                "disambiguation_question": cd.get("disambiguation_question", ""),
+                "bias_candidates": cd.get("bias_candidates", []),
             }
             st.session_state.phase = "generating"
             st.rerun()
@@ -1363,6 +1434,9 @@ elif st.session_state.phase == "challenge":
             new_cd["extra_listening"] = 2
             new_cd["capcs_state"] = "listening"
             new_cd["loop_context"] = loop_ctx
+            new_cd["pre_identified_bias"] = ""
+            new_cd["disambiguation_question"] = ""
+            new_cd["bias_candidates"] = []
             st.session_state.current_decision = new_cd
             st.session_state.phase = "generating"
             st.rerun()
@@ -1399,6 +1473,9 @@ elif st.session_state.phase == "challenge":
             new_cd["extra_listening"] = 2
             new_cd["capcs_state"] = "listening"
             new_cd["loop_context"] = loop_ctx
+            new_cd["pre_identified_bias"] = ""
+            new_cd["disambiguation_question"] = ""
+            new_cd["bias_candidates"] = []
             st.session_state.current_decision = new_cd
             st.session_state.phase = "generating"
             st.rerun()
@@ -1508,6 +1585,7 @@ elif st.session_state.phase == "challenge":
                 "rejected_options": rejected_opts, "confirmed_bias": "",
                 "loop_context": loop_ctx, "answer_signals": {},
                 "counterattack_exchanges": [],
+                "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
             }
             st.session_state.phase = "generating"
             st.rerun()
@@ -1623,6 +1701,7 @@ elif st.session_state.phase == "challenge":
                         "rejected_options": rej_opts_p, "confirmed_bias": "",
                         "loop_context": loop_ctx, "answer_signals": {},
                         "counterattack_exchanges": [],
+                        "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
                     }
                     st.session_state.phase = "generating"
                     st.rerun()
@@ -1736,6 +1815,7 @@ elif st.session_state.phase == "challenge":
                 "loop_context": loop_ctx,
                 "answer_signals": {},
                 "counterattack_exchanges": [],
+                "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
             }
             st.session_state.phase = "generating"
             st.rerun()

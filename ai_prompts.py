@@ -697,39 +697,67 @@ Answer YES or NO only. Nothing else."""
 
 
 def get_spark_message(conversation_history: list, profile_str: str, context: str,
-                      rejected_biases: list = None) -> str:
+                      rejected_biases: list = None,
+                      recently_used_biases: list = None,
+                      pre_identified_bias: str = "") -> str:
     """
-    Spark turn. Names the bias earned from the full conversation.
+    Spark turn. If pre_identified_bias is set, skips selection and writes
+    the narrative for that specific bias. Otherwise runs the full selection.
     Returns spark message + BIAS_NAME/BIAS_EXPLANATION fields.
     Returns 'SIGNAL_INSUFFICIENT' if no bias is clearly earned.
     """
     if rejected_biases is None:
         rejected_biases = []
+    if recently_used_biases is None:
+        recently_used_biases = []
 
     history_text = "\n".join([
         f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
 
+    # ── Fast path: bias already identified by the diagnostic ─────────────────
+    if pre_identified_bias:
+        prompt = f"""The active cognitive bias in this conversation has been identified as: {pre_identified_bias}
+
+Write a spark message of 2-3 sentences (max 60 words) that:
+1. Opens with a direct observation about the specific thinking pattern visible in the conversation
+2. Names '{pre_identified_bias}' naturally mid-sentence as a revelation: "that pull toward X is called {pre_identified_bias}" or "this pattern is called {pre_identified_bias}"
+3. Explains in one sentence what it's doing to their thinking right now
+
+Do NOT introduce any option or ask a question.
+Write in second person only.
+Never open with a quote or paraphrase of the user's words.
+Start with your own direct observation — e.g. "That pull toward X is making Y feel like the only option."
+
+After the message, output on new lines:
+BIAS_NAME: {pre_identified_bias}
+BIAS_EXPLANATION: [one plain English sentence — what this bias is]
+
+FULL CONVERSATION:
+{history_text}
+
+CONTEXT: {context}
+PROFILE:
+{profile_str}"""
+        return ask_ai(prompt, 4000)
+
     rejected_note = ""
     if rejected_biases:
-        rejected_note = f"\nThe following biases were already tried and the user said they don't resonate — do NOT use them: {', '.join(rejected_biases)}\n"
+        rejected_note = f"\nBiases tried this session that the user rejected — do NOT reuse: {', '.join(rejected_biases)}\n"
+    if recently_used_biases:
+        rejected_note += f"\nBiases identified in this user's recent sessions — strongly avoid repeating unless the evidence is overwhelming and no other bias fits: {', '.join(recently_used_biases)}\n"
 
-    prompt = f"""You are a psychologist identifying the cognitive bias most active in this person's thinking.
+    prompt = f"""You are an expert psychologist. Your task: identify the SINGLE most precise cognitive bias active in this conversation — not the most obvious one, the most precise one.
 
-Read the FULL conversation carefully — not just the last message. Identify which of the three dimensions showed the strongest distortion across all answers:
+This is a precision task, not a pattern-matching task. Read for what is SPECIFIC and UNIQUE about how this person thinks.
 
-- DIMENSION 1 (wants/values): Is the user valuing something that does not serve their future self?
-- DIMENSION 2 (fears/losses): Is the user avoiding something more than pursuing something?
-- DIMENSION 3 (assumptions): Is the user treating a belief as a fixed fact?
-
-Then select ONE bias from the taxonomy below that best explains the pattern across the FULL conversation.
-
-IMPORTANT — bias selection discipline:
-- Consider ALL 15 biases before deciding. Do not stop at the first plausible one.
-- Commonly discussed biases (Loss Aversion, Sunk Cost Fallacy, Status Quo Bias) are often chosen by default — only pick them if they are genuinely the strongest fit, not because they are familiar.
-- Look for the bias that best explains the SPECIFIC pattern in THIS conversation, not the most general one.
-- The taxonomy is presented in random order deliberately — treat each bias with equal weight.
+SELECTION PROCESS — follow these steps in order:
+1. Read the full conversation. What is the core distortion? Not what the decision is about, but what specific mental pattern is distorting the user's reasoning.
+2. Consider all 15 biases in the taxonomy simultaneously — do NOT pre-filter by decision type or category.
+3. HARD CONSTRAINT on over-diagnosed biases: Before selecting Loss Aversion, Status Quo Bias, or Sunk Cost Fallacy, you MUST ask: "Is there another bias in the list that explains this pattern equally well or better?" If yes — use that other bias. These three are systematically over-diagnosed; only fall back to them if they are uniquely the best explanation and no other bias fits.
+4. The bias must be EARNED by specific evidence from what the user actually said — not inferred from the decision type alone (e.g., "it's a career decision so probably Status Quo Bias").
+5. Prefer the bias that would genuinely SURPRISE the user — the one they haven't already thought of themselves.
 {rejected_note}
 {_shuffled_dimensions()}
 
@@ -1108,6 +1136,128 @@ Rules:
 FULL CONVERSATION:
 {history_text}
 
+PROFILE:
+{profile_str}
+
+Output only the question."""
+    return ask_ai(prompt, 200)
+
+
+def identify_candidate_biases(conversation_history: list, profile_str: str,
+                               context: str) -> list:
+    """
+    Diagnostic step after listening questions.
+    Returns up to 3 candidate biases sorted by score, each backed by evidence
+    from what the user actually said. Only returns biases with score >= 4.
+    Returns [] if no clear signal.
+    """
+    import json as _json, re as _re
+
+    user_turns = "\n".join([
+        f"USER: {m['content']}"
+        for m in conversation_history
+        if m.get("role") == "user"
+    ])
+    if not user_turns.strip():
+        return []
+
+    prompt = f"""You are a diagnostic psychologist. Read the user's answers and identify which cognitive biases they specifically reveal.
+
+For each bias you identify, you MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision type — only from what the user actually said.
+
+Return ONLY a JSON array with at most 3 entries, highest confidence first:
+[
+  {{"bias": "Exact Bias Name From Taxonomy", "evidence": "specific phrase from user", "score": 8}},
+  {{"bias": "Second Bias Name", "evidence": "what specifically points to it", "score": 5}}
+]
+
+score = 1-10. Only include biases with score >= 4. If only one fits well, return just that one. If nothing clearly fits, return [].
+
+BIAS TAXONOMY — only use names exactly as listed:
+{CASPER_DIMENSIONS}
+
+USER'S ANSWERS:
+{user_turns}
+
+CONTEXT: {context}
+PROFILE:
+{profile_str}
+
+Return ONLY the JSON array. No explanation."""
+
+    result = ask_ai(prompt, 600)
+    try:
+        stripped = result.strip()
+        if stripped.startswith("```"):
+            stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
+        start = stripped.find("[")
+        if start == -1:
+            return []
+        depth, end = 0, -1
+        for i, ch in enumerate(stripped[start:], start):
+            if ch == "[": depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1; break
+        if end == -1:
+            return []
+        parsed = _json.loads(stripped[start:end])
+        if not isinstance(parsed, list):
+            return []
+        valid = []
+        for item in parsed:
+            if isinstance(item, dict) and "bias" in item:
+                score = int(item.get("score", 0))
+                if score >= 4 and item["bias"].strip():
+                    valid.append({
+                        "bias": item["bias"].strip(),
+                        "evidence": item.get("evidence", "").strip(),
+                        "score": score,
+                    })
+        valid.sort(key=lambda x: x["score"], reverse=True)
+        return valid[:3]
+    except Exception:
+        return []
+
+
+def get_disambiguation_question(cand_a: dict, cand_b: dict,
+                                 conversation_history: list, profile_str: str,
+                                 decision: str, context: str) -> str:
+    """
+    Two candidate biases are close. Generate ONE question whose answer would
+    clearly differentiate between them, without naming either bias.
+    """
+    history_text = "\n".join([
+        f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history
+    ])
+    prompt = f"""You are diagnosing between two possible cognitive biases that both seem active in this conversation.
+
+CANDIDATE A: {cand_a['bias']}
+Evidence so far: {cand_a['evidence']}
+
+CANDIDATE B: {cand_b['bias']}
+Evidence so far: {cand_b['evidence']}
+
+Write ONE question whose answer will clearly tell you which of these two biases is dominant.
+- If A is dominant, the user's answer will confirm {cand_a['bias']}
+- If B is dominant, the user's answer will confirm {cand_b['bias']}
+
+The question must feel completely natural — like a psychologist following a genuine thread of curiosity. The user must not sense they're being tested between two options.
+
+Rules:
+- Max 35 words
+- One question only, ends with ?
+- Warm and direct — speaks to what's happening inside them
+- Do NOT name any bias or psychological concept
+- Do NOT repeat a question already asked in the conversation
+
+FULL CONVERSATION:
+{history_text}
+
+DECISION: {decision}
+CONTEXT: {context}
 PROFILE:
 {profile_str}
 
