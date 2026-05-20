@@ -1536,9 +1536,9 @@ elif st.session_state.phase == "challenge":
                 # ── Above threshold — threshold reached ───────────────────────
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(
-                        f"You're at **{conf_val}% confidence** — that feels like enough "
-                        f"clarity to move forward with *{perspective_option}*. "
-                        f"Ready to continue, or would you like to keep exploring?"
+                        f"You're at **{conf_val}% confidence** about *{perspective_option}* — "
+                        f"not full certainty yet, but enough to move forward if you're ready. "
+                        f"Do you want to continue, or keep exploring?"
                     )
                 scroll_to_chat_bottom()
                 col1, col2 = st.columns(2)
