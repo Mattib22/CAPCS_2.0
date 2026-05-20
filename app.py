@@ -1249,12 +1249,16 @@ elif st.session_state.phase == "challenge":
                 st.session_state.all_options.append(new_opt)
 
             # ── Inductive bias identification ─────────────────────────────────
+            # All three questions must be answered before the diagnostic runs.
+            # If two biases are too close after Q3, one disambiguation question
+            # (Q4) is asked; after that the winner is used for spark.
             pre_identified = cd.get("pre_identified_bias", "")
+            new_extra = 0
 
             if extra_listening > 0:
+                # Disambiguation question was just answered — final identification
                 new_extra = extra_listening - 1
                 if new_extra == 0:
-                    # Disambiguation answer received — run final identification
                     with st.spinner(""):
                         final_cands = identify_candidate_biases(
                             conv_hist, enriched_profile_str, context
@@ -1265,33 +1269,24 @@ elif st.session_state.phase == "challenge":
                 else:
                     next_state = "listening"
 
-            elif listening_answers >= 2:
+            elif listening_answers >= 3:
+                # All three answers in — run the diagnostic
                 with st.spinner(""):
                     candidates = identify_candidate_biases(
                         conv_hist, enriched_profile_str, context
                     )
-
-                if listening_answers >= 3:
-                    # Hard stop — spark regardless
-                    if candidates:
-                        pre_identified = candidates[0]["bias"]
-                    next_state = "spark"
-                    new_extra = 0
-                    cd["disambiguation_question"] = ""
-
-                elif candidates:
+                if candidates:
                     top = candidates[0]
                     second = candidates[1] if len(candidates) > 1 else None
                     gap = top["score"] - second["score"] if second else 10
 
                     if top["score"] >= 7 and gap >= 3:
-                        # Clear winner — go to spark
+                        # Clear winner — spark directly
                         pre_identified = top["bias"]
                         next_state = "spark"
-                        new_extra = 0
                         cd["disambiguation_question"] = ""
                     else:
-                        # Ambiguous — ask one targeted disambiguation question
+                        # Two close candidates — ask one disambiguation question
                         if second:
                             with st.spinner(""):
                                 disambig_q = get_disambiguation_question(
@@ -1305,15 +1300,13 @@ elif st.session_state.phase == "challenge":
                         cd["bias_candidates"] = candidates[:2]
                         next_state = "listening"
                         new_extra = 1
-
                 else:
-                    # No candidates — continue to Q3
-                    next_state = "listening"
-                    new_extra = 0
+                    # No candidates — spark anyway (get_spark_message handles it)
+                    next_state = "spark"
 
             else:
+                # Fewer than 3 answers — keep asking
                 next_state = "listening"
-                new_extra = 0
 
             st.session_state.current_decision = {
                 "decision": cd["decision"],
