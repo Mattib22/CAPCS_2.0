@@ -1311,7 +1311,7 @@ elif st.session_state.phase == "challenge":
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
-            new_cd["extra_listening"] = 1
+            new_cd["extra_listening"] = 2
             new_cd["capcs_state"] = "listening"
             new_cd["loop_context"] = loop_ctx
             st.session_state.current_decision = new_cd
