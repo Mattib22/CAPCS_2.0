@@ -1365,18 +1365,6 @@ elif st.session_state.phase == "challenge":
 
         confidence_start = cd.get("confidence_start", 35)
         perspective_option = cd.get("perspective_text", "")
-
-        # Reset pending state on a fresh counterattack entry (no prior exchanges)
-        if not cd.get("counterattack_exchanges"):
-            ca_exchanges_exist = any(
-                r.get("round_state") in ("counterattack_partial", "counterattack_rejected")
-                for r in cd.get("rounds_log", [])
-            )
-            if not ca_exchanges_exist:
-                st.session_state["_ca_partial_mode"] = False
-                st.session_state["_ca_partial_conf"] = None
-                st.session_state["_ca_pending_conf"] = None
-
         ca_pending_conf = st.session_state.get("_ca_pending_conf", None)
 
         def _go_conviction_slider(conf_val):
