@@ -152,6 +152,8 @@ with st.sidebar:
         st.session_state["_ca_partial_mode"] = False
         st.session_state["_ca_partial_conf"] = None
         st.session_state["_ca_pending_conf"] = None
+        st.session_state["_ca_explore_above"] = False
+        st.session_state["_partial_probe_question"] = ""
         st.session_state["_conviction_suggestions"] = ""
         st.session_state["_listening_clarification"] = None
         st.session_state.pop("_report_analysis", None)
@@ -1450,7 +1452,10 @@ elif st.session_state.phase == "challenge":
             st.session_state["_ca_partial_mode"] = False
             st.session_state["_ca_partial_conf"] = None
             st.session_state["_ca_pending_conf"] = None
+            st.session_state["_ca_explore_above"] = False
+            st.session_state["_partial_probe_question"] = ""
             st.session_state["_conviction_suggestions"] = ""
+            st.session_state["_listening_clarification"] = None
             st.rerun()
 
         def _go_rejected(conf_val):
@@ -1486,6 +1491,9 @@ elif st.session_state.phase == "challenge":
             st.session_state["_ca_partial_mode"] = False
             st.session_state["_ca_partial_conf"] = None
             st.session_state["_ca_pending_conf"] = None
+            st.session_state["_ca_explore_above"] = False
+            st.session_state["_partial_probe_question"] = ""
+            st.session_state["_listening_clarification"] = None
             st.session_state.current_decision = {
                 "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
                 "context": cd.get("context", ""), "options": cd["options"],
@@ -1791,7 +1799,10 @@ elif st.session_state.phase == "challenge":
             st.session_state["_ca_partial_mode"] = False
             st.session_state["_ca_partial_conf"] = None
             st.session_state["_ca_pending_conf"] = None
+            st.session_state["_ca_explore_above"] = False
+            st.session_state["_partial_probe_question"] = ""
             st.session_state["_conviction_suggestions"] = ""
+            st.session_state["_listening_clarification"] = None
             st.session_state.phase = "feedback"
             st.rerun()
 
