@@ -1237,7 +1237,8 @@ elif st.session_state.phase == "challenge":
         # Always-visible section — not a collapsed expander
         with st.container(border=True):
             st.markdown("💡 **What I noticed in your thinking**")
-            st.markdown(f"**{bias_name_short}**")
+            if bias_name_short:
+                st.markdown(f"**{bias_name_short}**")
             st.markdown(cd.get("explanation_text", ""))
             if existing_corr:
                 prev = {
@@ -1361,6 +1362,15 @@ elif st.session_state.phase == "challenge":
         scroll_to_chat_bottom()
 
         confidence_start = cd.get("confidence_start", 35)
+        # Reset partial mode if this is a fresh counterattack (no exchanges yet)
+        if not cd.get("counterattack_exchanges"):
+            ca_exchanges_exist = any(
+                r.get("round_state") == "counterattack_partial"
+                for r in cd.get("rounds_log", [])
+            )
+            if not ca_exchanges_exist:
+                st.session_state["_ca_partial_mode"] = False
+                st.session_state["_ca_partial_conf"] = None
         ca_partial_mode = st.session_state.get("_ca_partial_mode", False)
 
         def _go_conviction_slider(conf_val):
@@ -1413,7 +1423,7 @@ elif st.session_state.phase == "challenge":
             st.markdown("")
             if st.button("→ Submit", key=f"ca_conf_submit_{round_num}",
                          type="primary", use_container_width=True):
-                if conf_val > CONFIDENCE_THRESHOLD:
+                if conf_val >= CONFIDENCE_THRESHOLD:
                     _go_conviction_slider(conf_val)
                 elif conf_val > confidence_start:
                     # Partial: ask what part doesn't land

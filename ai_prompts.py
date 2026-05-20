@@ -253,9 +253,14 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
     if confirmed_bias:
         confirmed_instruction = f"""The user has confirmed that **{confirmed_bias}** resonates with them — do not re-name or re-explain it.
 
-Write ONE message of MAXIMUM 80 WORDS doing exactly two things:
-1. REFLECT (1 sentence): Name what the bias is doing to their thinking right now — do NOT open with a quote or paraphrase of their words. Do not start with "Your feeling that '...'", "When you said '...'", or any echo opener. Describe the pattern directly: e.g. "There's a pull here to treat X as the only path to Y."
-2. COUNTERATTACK (2-3 sentences): Introduce ONE concrete option that is the direct logical antidote to {confirmed_bias}. The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative. Explain WHY this specific option breaks the pattern — make the connection explicit but in natural language. Do NOT use the phrase "the counterforce". Instead write naturally: e.g. "What breaks that pattern is...", "The move that opens this up is...", "What shifts this is...". Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships). Do NOT generate options from the profile alone. Do NOT ask a question at the end — a confidence slider will follow your message.
+Write ONE message of MAXIMUM 80 WORDS. Start DIRECTLY with the counterattacking option — do NOT open with a reflection sentence about the bias:
+- In 2-3 sentences, present ONE concrete option that is the direct logical antidote to {confirmed_bias}
+- Make the connection explicit: "Because [what this bias is pulling the user toward], the move that opens this up is Y — which works by [mechanism]"
+- The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative
+- Do NOT use the phrase "the counterforce"
+- Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships)
+- Do NOT generate the option from the profile alone
+- Do NOT ask a question at the end — a confidence slider will follow your message
 
 Tone: warm, direct."""
 
