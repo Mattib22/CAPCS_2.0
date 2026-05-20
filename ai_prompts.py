@@ -1039,39 +1039,57 @@ def extract_counterattack_signal(response: str) -> dict:
 
 
 def get_partial_probe(option_proposed: str, confirmed_bias: str,
-                       conversation_history: list, profile_str: str) -> str:
+                       conversation_history: list, profile_str: str,
+                       above_threshold: bool = False) -> str:
     """
-    When the user's confidence lands below the threshold or they say 'Partially',
-    ask a psychologist-style question that surfaces what's blocking internally —
-    not just what 'doesn't work' logistically.
+    When the user explores further after the counterattack.
+    - above_threshold=False: user is below their clarity bar — surface what's blocking.
+    - above_threshold=True: user is above their clarity bar but still uncertain —
+      surface what would take them all the way.
     """
     history_text = "\n".join([
         f"{'CAPCS' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
         for m in conversation_history
     ])
-    prompt = f"""The user has just evaluated an option with partial confidence. They haven't fully rejected it, but something isn't landing.
+
+    if above_threshold:
+        framing = f"""The user is largely convinced by this option but something is still holding back full commitment — they chose to keep exploring rather than move forward.
 
 OPTION PROPOSED: {option_proposed}
 CONFIRMED BIAS: {confirmed_bias}
 
-Your job: ask ONE question that helps the user surface what's happening inside them — not a logistical objection, but an internal resistance, a fear, an assumption, or a value conflict.
+Your job: ask ONE question that surfaces what the remaining hesitation is about. Not what doesn't work logistically — what's the internal gap between being mostly convinced and fully clear.
 
-The answer is probably already inside them — it may just be unconscious. Your question should make it visible, not ask them to evaluate or justify.
+The answer is probably a fear, a value conflict, or something they haven't admitted to themselves yet. Your question should make it visible.
+
+Examples:
+✓ "What are you protecting by not fully committing to this?"
+✓ "What would need to be true for you to go all the way with it?"
+✓ "When you imagine actually doing it, what feeling comes up first?"
+✗ "What doesn't work about it?" (too broad)
+✗ "What are your concerns?" (too generic)"""
+    else:
+        framing = f"""The user evaluated this option and something isn't fully landing — they haven't rejected it, but they can't fully commit either.
+
+OPTION PROPOSED: {option_proposed}
+CONFIRMED BIAS: {confirmed_bias}
+
+Your job: ask ONE question that surfaces what's blocking internally — not a logistical objection, but a fear, an assumption, a value conflict, or something unconscious.
+
+Examples:
+✓ "What would it cost you personally to go in that direction?"
+✓ "What are you protecting by not fully committing to this?"
+✓ "What feeling comes up when you imagine actually doing it?"
+✗ "What specifically doesn't work?" (too logistical)
+✗ "Can you explain your hesitation?" (too generic)"""
+
+    prompt = f"""{framing}
 
 Rules:
 - Max 30 words
 - One question only, ends with ?
 - Do NOT ask about facts, logistics, or external constraints
-- Do NOT say "what doesn't work" — that frames it as a practical problem
-- Ask about feelings, meanings, fears, or what feels threatening about the option
-- Speak warmly, like a psychologist who is genuinely curious
-
-Examples of the right tone:
-✓ "What would it cost you personally to go in that direction?"
-✓ "What are you protecting by not fully committing to this?"
-✓ "What feeling comes up when you imagine actually doing it?"
-✗ "What specifically doesn't work about this option?" (too logistical)
-✗ "Can you explain your hesitation?" (too generic)
+- Warm, psychologist-like tone — genuinely curious, not evaluative
 
 FULL CONVERSATION:
 {history_text}
