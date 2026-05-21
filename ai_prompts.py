@@ -293,14 +293,31 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
     if confirmed_bias:
         confirmed_instruction = f"""The user has confirmed that **{confirmed_bias}** resonates with them — do not re-name or re-explain it.
 
-Write ONE message of MAXIMUM 80 WORDS. Start DIRECTLY with the counterattacking option — do NOT open with a reflection sentence about the bias:
-- In 2-3 sentences, present ONE concrete option that is the direct logical antidote to {confirmed_bias}
-- Make the connection explicit: "Because [what this bias is pulling the user toward], the move that opens this up is Y — which works by [mechanism]"
-- The option MUST reference at least one specific word, fear, desire, or constraint the user actually said in the conversation — not a generic alternative
-- Do NOT use the phrase "the counterforce"
-- Ground the option in what the user actually said — including any constraints (visa, location, time, money, relationships)
-- Do NOT generate the option from the profile alone
-- Do NOT ask a question at the end — a confidence slider will follow your message
+THE COUNTERATTACKING OPTION — CRITICAL:
+
+The user's current leaning is: {leaning or 'genuinely undecided'}
+Their confidence in that leaning is: {confidence}%
+
+Step 1: Identify what **{confirmed_bias}** is specifically blocking or distorting WITHIN the user's leaning. What is it making harder to see, harder to do, or harder to believe about the path they are already choosing?
+
+Step 2: Use the confidence level to determine how far the option can deviate from the leaning:
+
+- 60% and above: the option must stay WITHIN the leaning. Expand or clarify how the user sees their preferred path. Do NOT propose the other option or suggest they change direction.
+
+- 35% to 59%: the option can bridge both directions. Propose a middle path that takes something meaningful from each option without fully committing to either.
+
+- Below 35%: the option can more freely explore the other direction. The user is not strongly committed to their leaning and is genuinely open.
+
+Step 3: Before writing the option, apply this test: "Does this option help the user move forward on {leaning or 'their preferred direction'}, or does it push them toward the other option?" If confidence is 60%+ and the option pushes toward the other option — rewrite it.
+
+The option must address the specific bias detected.
+Confidence determines the direction of the option.
+Bias determines the content of the option.
+
+The option must be grounded in what the user said in the conversation — including any constraints they mentioned (visa, money, location, time, projects already in progress). Do NOT generate from profile alone.
+
+Max 80 words total. No re-explanation of the bias — the spark already did that. Start directly with the option.
+Do NOT ask a question at the end — a confidence slider will follow your message.
 
 Tone: warm, direct."""
 

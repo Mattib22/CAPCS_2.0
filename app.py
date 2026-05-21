@@ -1067,7 +1067,7 @@ elif st.session_state.phase == "generating":
             confirmed_bias = cd.get("confirmed_bias", "")
             full_response = get_challenge_response(
                 cd["decision"], cd["options"], cd.get("leaning", ""),
-                cd["confidence_before"], enriched_profile_str,
+                cd.get("confidence_before", cd.get("confidence_start", 50)), enriched_profile_str,
                 history_text, cd.get("last_answer", ""), context, longitudinal_text,
                 emotion=emotion, turn_num=round_num,
                 is_undecided=is_undecided,
