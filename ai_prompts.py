@@ -264,12 +264,13 @@ Output only the question, nothing else."""
     return ask_ai(prompt, 4000)
 
 
-def get_challenge_response(decision, options, leaning, confidence, profile_str,
-                           history, last_answer, context, longitudinal="",
-                           emotion="neutral", turn_num=2,
-                           is_undecided=False, confidence_dropped=False,
-                           sustained_drop=False, confirmed_bias="",
-                           bias_resonance="full"):
+def get_challenge_response(  # noqa: PLR0913
+        decision, options, leaning, confidence, profile_str,
+        history, last_answer, context, longitudinal="",
+        emotion="neutral", turn_num=2,
+        is_undecided=False, confidence_dropped=False,
+        sustained_drop=False, confirmed_bias="",
+        bias_resonance="full"):
     """
     State: counterattack. User confirmed a bias. Introduce the direct antidote option.
     Also returns extractable structured fields in a hidden block for Supabase.
