@@ -1023,64 +1023,89 @@ elif st.session_state.phase == "generating":
             st.session_state.current_decision = cd
 
         elif capcs_state == "spark":
-            spark_response = get_spark_message(
-                cd.get("conversation_history", []),
-                enriched_profile_str,
-                context,
-                cd.get("rejected_biases", []),
-                recently_used_biases=st.session_state.get("_recently_used_biases", []),
-                pre_identified_bias=cd.get("pre_identified_bias", "")
-            )
-            fields = extract_spark_fields(spark_response)
-            message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
-            bias_name = fields["bias_name"]
+            bias_resonance_val = cd.get("bias_resonance", "full") or "full"
+            existing_conv_msg = cd.get("conversation_message", "")
+            existing_bias_name = cd.get("bias_text", "").split("—")[0].strip()[:60]
 
-            if not message or "SIGNAL_INSUFFICIENT" in spark_response:
-                # Insufficient signal — drop back to listening for one more question
-                cd["capcs_state"] = "listening"
-                cd["extra_listening"] = 1
-                cd["conversation_message"] = ""
+            if existing_conv_msg and existing_bias_name:
+                # Resonance changed after initial spark — only regenerate counterattack
+                bias_name = existing_bias_name
+                full_ca = get_challenge_response(
+                    cd["decision"], cd["options"], cd.get("leaning", ""),
+                    cd.get("confidence_before", cd.get("confidence_start", 50)),
+                    enriched_profile_str, history_text,
+                    cd.get("last_answer", ""), context, longitudinal_text,
+                    emotion=emotion, turn_num=round_num,
+                    is_undecided=is_undecided,
+                    confirmed_bias=bias_name,
+                    bias_resonance=bias_resonance_val
+                )
+                ca_msg = get_conversation_message(full_ca)
+                ca_fields = extract_challenge_fields(full_ca)
+                cd["counterattack_message"] = ca_msg or ""
+                cd["perspective_text"] = ca_fields["perspective_text"] or cd.get("perspective_text", "")
+                if ca_fields["perspective_text"] and ca_fields["perspective_text"] not in st.session_state.all_options:
+                    st.session_state.all_options.append(ca_fields["perspective_text"])
                 st.session_state.current_decision = cd
             else:
-                # If message came back but structured fields weren't parsed, try inline extract
-                if not bias_name:
-                    import re as _re
-                    _m = _re.search(
-                        r'(?:called|is called|known as)\s+([A-Z][A-Za-z ]{2,50}?)(?:[.,]|$)',
-                        message
-                    )
-                    bias_name = _m.group(1).strip() if _m else ""
+                spark_response = get_spark_message(
+                    cd.get("conversation_history", []),
+                    enriched_profile_str,
+                    context,
+                    cd.get("rejected_biases", []),
+                    recently_used_biases=st.session_state.get("_recently_used_biases", []),
+                    pre_identified_bias=cd.get("pre_identified_bias", "")
+                )
+                fields = extract_spark_fields(spark_response)
+                message = fields["spark_message"] or spark_response.split("BIAS_NAME:")[0].strip()
+                bias_name = fields["bias_name"]
 
-                cd["conversation_message"] = message
-                cd["bias_text"] = bias_name
-                cd["explanation_text"] = fields["bias_explanation"]
-                cd["perspective_option"] = ""
-                cd["perspective_text"] = ""
-                cd["question_text"] = ""
-                cd.setdefault("conversation_history", []).append({
-                    "role": "assistant", "content": message,
-                    "state": "spark", "bias_name": bias_name,
-                    "bias_explanation": fields["bias_explanation"],
-                })
-                # Generate counterattack immediately so spark state shows it inline
-                if bias_name:
-                    full_ca = get_challenge_response(
-                        cd["decision"], cd["options"], cd.get("leaning", ""),
-                        cd.get("confidence_before", cd.get("confidence_start", 50)),
-                        enriched_profile_str, history_text,
-                        cd.get("last_answer", ""), context, longitudinal_text,
-                        emotion=emotion, turn_num=round_num,
-                        is_undecided=is_undecided,
-                        confirmed_bias=bias_name,
-                        bias_resonance="full"
-                    )
-                    ca_msg = get_conversation_message(full_ca)
-                    ca_fields = extract_challenge_fields(full_ca)
-                    cd["counterattack_message"] = ca_msg or ""
-                    cd["perspective_text"] = ca_fields["perspective_text"] or ""
-                    if ca_fields["perspective_text"] and ca_fields["perspective_text"] not in st.session_state.all_options:
-                        st.session_state.all_options.append(ca_fields["perspective_text"])
-                st.session_state.current_decision = cd
+                if not message or "SIGNAL_INSUFFICIENT" in spark_response:
+                    # Insufficient signal — drop back to listening for one more question
+                    cd["capcs_state"] = "listening"
+                    cd["extra_listening"] = 1
+                    cd["conversation_message"] = ""
+                    st.session_state.current_decision = cd
+                else:
+                    # If message came back but structured fields weren't parsed, try inline extract
+                    if not bias_name:
+                        import re as _re
+                        _m = _re.search(
+                            r'(?:called|is called|known as)\s+([A-Z][A-Za-z ]{2,50}?)(?:[.,]|$)',
+                            message
+                        )
+                        bias_name = _m.group(1).strip() if _m else ""
+
+                    cd["conversation_message"] = message
+                    cd["bias_text"] = bias_name
+                    cd["explanation_text"] = fields["bias_explanation"]
+                    cd["perspective_option"] = ""
+                    cd["perspective_text"] = ""
+                    cd["question_text"] = ""
+                    cd.setdefault("conversation_history", []).append({
+                        "role": "assistant", "content": message,
+                        "state": "spark", "bias_name": bias_name,
+                        "bias_explanation": fields["bias_explanation"],
+                    })
+                    # Generate counterattack immediately so spark state shows it inline
+                    if bias_name:
+                        full_ca = get_challenge_response(
+                            cd["decision"], cd["options"], cd.get("leaning", ""),
+                            cd.get("confidence_before", cd.get("confidence_start", 50)),
+                            enriched_profile_str, history_text,
+                            cd.get("last_answer", ""), context, longitudinal_text,
+                            emotion=emotion, turn_num=round_num,
+                            is_undecided=is_undecided,
+                            confirmed_bias=bias_name,
+                            bias_resonance=bias_resonance_val
+                        )
+                        ca_msg = get_conversation_message(full_ca)
+                        ca_fields = extract_challenge_fields(full_ca)
+                        cd["counterattack_message"] = ca_msg or ""
+                        cd["perspective_text"] = ca_fields["perspective_text"] or ""
+                        if ca_fields["perspective_text"] and ca_fields["perspective_text"] not in st.session_state.all_options:
+                            st.session_state.all_options.append(ca_fields["perspective_text"])
+                    st.session_state.current_decision = cd
 
         elif capcs_state == "counterattack":
             confirmed_bias = cd.get("confirmed_bias", "")
@@ -1414,6 +1439,7 @@ elif st.session_state.phase == "challenge":
                     new_cd = dict(cd)
                     new_cd["bias_resonance"] = "partial"
                     new_cd["confirmed_bias"] = bias_name_short
+                    new_cd["counterattack_message"] = ""  # regenerate with resonance tone
                     st.session_state.current_decision = new_cd
                     st.rerun()
                 if doesnt_fit:
@@ -1425,6 +1451,7 @@ elif st.session_state.phase == "challenge":
                     new_cd["bias_resonance"] = "none"
                     new_cd["confirmed_bias"] = bias_name_short
                     new_cd["rejected_biases"] = rejected
+                    new_cd["counterattack_message"] = ""  # regenerate with resonance tone
                     st.session_state.current_decision = new_cd
                     st.rerun()
 
