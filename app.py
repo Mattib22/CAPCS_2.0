@@ -956,7 +956,7 @@ elif st.session_state.phase == "generating":
             if r.get("round_state") == "spark":
                 bias_n = r.get("bias", "").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    expander_title = f"What is '{bias_n}'?" if bias_n else "What is this pattern?"
+                    expander_title = f"What is {bias_n}?" if bias_n else "What is this pattern?"
                     with st.expander(expander_title, expanded=True):
                         st.markdown(f"**{bias_n}**")
                         st.markdown(r.get("explanation", ""))
@@ -1062,6 +1062,24 @@ elif st.session_state.phase == "generating":
                     "state": "spark", "bias_name": bias_name,
                     "bias_explanation": fields["bias_explanation"],
                 })
+                # Generate counterattack immediately so spark state shows it inline
+                if bias_name:
+                    full_ca = get_challenge_response(
+                        cd["decision"], cd["options"], cd.get("leaning", ""),
+                        cd.get("confidence_before", cd.get("confidence_start", 50)),
+                        enriched_profile_str, history_text,
+                        cd.get("last_answer", ""), context, longitudinal_text,
+                        emotion=emotion, turn_num=round_num,
+                        is_undecided=is_undecided,
+                        confirmed_bias=bias_name,
+                        bias_resonance="full"
+                    )
+                    ca_msg = get_conversation_message(full_ca)
+                    ca_fields = extract_challenge_fields(full_ca)
+                    cd["counterattack_message"] = ca_msg or ""
+                    cd["perspective_text"] = ca_fields["perspective_text"] or ""
+                    if ca_fields["perspective_text"] and ca_fields["perspective_text"] not in st.session_state.all_options:
+                        st.session_state.all_options.append(ca_fields["perspective_text"])
                 st.session_state.current_decision = cd
 
         elif capcs_state == "counterattack":
@@ -1138,7 +1156,7 @@ elif st.session_state.phase == "challenge":
             if r.get("round_state") == "spark":
                 bias_n = r.get("bias", "").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    expander_title = f"What is '{bias_n}'?" if bias_n else "What is this pattern?"
+                    expander_title = f"What is {bias_n}?" if bias_n else "What is this pattern?"
                     with st.expander(expander_title, expanded=True):
                         st.markdown(f"**{bias_n}**")
                         st.markdown(r.get("explanation", ""))
@@ -1151,7 +1169,7 @@ elif st.session_state.phase == "challenge":
     # Counterattack message is rendered inside the counterattack state block
     # (immediately above the slider) so the user always sees it.
     conversation_msg = cd.get("conversation_message", "")
-    if conversation_msg and capcs_state not in ("conviction", "counterattack"):
+    if conversation_msg and capcs_state not in ("conviction", "counterattack", "spark"):
         with st.chat_message("assistant", avatar="🧑‍🏫"):
             st.markdown(conversation_msg)
 
@@ -1353,19 +1371,23 @@ elif st.session_state.phase == "challenge":
     # ══════════════════════════════════════════════════════════════════════════
     elif capcs_state == "spark":
         bias_name_short = cd.get("bias_text", "").split("—")[0].strip()[:60]
-        # Only re-generate if the message itself is missing — not just the bias name
-        if not conversation_msg:
+        if not conversation_msg or not cd.get("counterattack_message"):
             st.session_state.phase = "generating"; st.rerun()
 
         uk = user_key_corr
+        counterattack_msg = cd.get("counterattack_message", "")
+        confidence_start = cd.get("confidence_start", 35)
+        ca_pending_conf = st.session_state.get("_ca_pending_conf", None)
 
-        # Always-visible section — not a collapsed expander
+        # ── Block 1: Possible pattern identified ─────────────────────────────
         with st.container(border=True):
-            section_title = f"What is '{bias_name_short}'?" if bias_name_short else "What is this pattern?"
-            st.markdown(f"**{section_title}**")
+            st.markdown("**Possible pattern identified**")
+            st.markdown(conversation_msg)
+            st.markdown("---")
             if bias_name_short:
-                st.markdown(f"**{bias_name_short}**")
+                st.markdown(f"What is **{bias_name_short}**?")
             st.markdown(cd.get("explanation_text", ""))
+            st.markdown("")
             kb = f"spark_{bias_name_short[:15].replace(' ','_')}_{round_num}"
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1375,93 +1397,274 @@ elif st.session_state.phase == "challenge":
             with col3:
                 doesnt_fit = st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True)
 
+        # Feedback-only handlers — record verdict, stay on this page
         if resonates:
             save_bias_correction(uk, bias_name_short, "accurate", "")
-            new_round = cd.get("rounds", 0) + 1
-            rounds_log = cd.get("rounds_log", [])
-            rounds_log.append({
-                "round": new_round, "round_number": new_round,
-                "round_state": "spark",
-                "timestamp": datetime.now().isoformat(),
-                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                "perspective": "", "question": "",
-                "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": "[accurate]",
-                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                "answer_key_signal": "", "shifted": True, "still_undecided": False,
-                "how_shifted": "", "leaning": cd.get("leaning", ""),
-                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
-            })
             new_cd = dict(cd)
-            new_cd["rounds"] = new_round
-            new_cd["rounds_log"] = rounds_log
-            new_cd["confirmed_bias"] = bias_name_short
             new_cd["bias_resonance"] = "full"
-            new_cd["capcs_state"] = "counterattack"
-            new_cd["counterattack_exchanges"] = []
+            new_cd["confirmed_bias"] = bias_name_short
             st.session_state.current_decision = new_cd
-            st.session_state.phase = "generating"
             st.rerun()
-
         if partially:
             save_bias_correction(uk, bias_name_short, "partial", "")
-            new_round = cd.get("rounds", 0) + 1
-            rounds_log = cd.get("rounds_log", [])
-            rounds_log.append({
-                "round": new_round, "round_number": new_round,
-                "round_state": "spark_partial",
-                "timestamp": datetime.now().isoformat(),
-                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                "perspective": "", "question": "",
-                "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": "[partial]",
-                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                "answer_key_signal": "", "shifted": False, "still_undecided": False,
-                "how_shifted": "", "leaning": cd.get("leaning", ""),
-                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
-            })
             new_cd = dict(cd)
-            new_cd["rounds"] = new_round
-            new_cd["rounds_log"] = rounds_log
-            new_cd["confirmed_bias"] = bias_name_short
             new_cd["bias_resonance"] = "partial"
-            new_cd["capcs_state"] = "counterattack"
-            new_cd["counterattack_exchanges"] = []
+            new_cd["confirmed_bias"] = bias_name_short
             st.session_state.current_decision = new_cd
-            st.session_state.phase = "generating"
             st.rerun()
-
         if doesnt_fit:
             save_bias_correction(uk, bias_name_short, "inaccurate", "")
-            new_round = cd.get("rounds", 0) + 1
-            rounds_log = cd.get("rounds_log", [])
-            rounds_log.append({
-                "round": new_round, "round_number": new_round,
-                "round_state": "spark_rejected",
-                "timestamp": datetime.now().isoformat(),
-                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
-                "perspective": "", "question": "",
-                "conversation_message": cd.get("conversation_message", ""),
-                "followups": [], "answer": "[inaccurate]",
-                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
-                "answer_key_signal": "", "shifted": False, "still_undecided": False,
-                "how_shifted": "", "leaning": cd.get("leaning", ""),
-                "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
-            })
             rejected = list(cd.get("rejected_biases", []))
             if bias_name_short and bias_name_short not in rejected:
                 rejected.append(bias_name_short)
             new_cd = dict(cd)
-            new_cd["rounds"] = new_round
-            new_cd["rounds_log"] = rounds_log
-            new_cd["rejected_biases"] = rejected  # session-scoped only — never written to Supabase
-            new_cd["confirmed_bias"] = bias_name_short
             new_cd["bias_resonance"] = "none"
-            new_cd["capcs_state"] = "counterattack"
-            new_cd["counterattack_exchanges"] = []
+            new_cd["confirmed_bias"] = bias_name_short
+            new_cd["rejected_biases"] = rejected
             st.session_state.current_decision = new_cd
+            st.rerun()
+
+        # ── Routing helpers ───────────────────────────────────────────────────
+        def _go_conviction_from_spark(conf_val):
+            perspective = cd.get("perspective_text", "")
+            if perspective and perspective not in st.session_state.all_options:
+                st.session_state.all_options.append(perspective)
+            conv_hist = list(cd.get("conversation_history", []))
+            conv_hist.append({"role": "user", "content": f"[confidence: {conf_val}%]"})
+            new_round = cd.get("rounds", 0) + 1
+            rl = list(cd.get("rounds_log", []))
+            rl.append({
+                "round": new_round, "round_number": new_round,
+                "round_state": "counterattack",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": perspective, "question": "",
+                "conversation_message": cd.get("counterattack_message", ""),
+                "followups": [], "answer": f"[confidence: {conf_val}%]",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": True, "still_undecided": False,
+                "how_shifted": "", "leaning": perspective or cd.get("leaning", ""),
+                "confidence": conf_val,
+                "shift": conf_val - cd.get("confidence_start", 50),
+                "confidence_shift": conf_val - cd.get("confidence_start", 50),
+            })
+            new_cd = dict(cd)
+            new_cd["rounds"] = new_round
+            new_cd["rounds_log"] = rl
+            new_cd["conversation_history"] = conv_hist
+            new_cd["capcs_state"] = "conviction"
+            st.session_state.current_decision = new_cd
+            st.session_state["_final_choice"] = perspective or cd.get("leaning", "")
+            st.session_state["_confidence_after"] = conf_val
+            st.session_state["_ca_partial_mode"] = False
+            st.session_state["_ca_partial_conf"] = None
+            st.session_state["_ca_pending_conf"] = None
+            st.session_state["_ca_explore_above"] = False
+            st.session_state["_partial_probe_question"] = ""
+            st.session_state["_conviction_suggestions"] = ""
+            st.session_state["_listening_clarification"] = None
+            st.rerun()
+
+        def _go_rejected_from_spark(conf_val):
+            bias_tried = cd.get("bias_text", "").split("—")[0].strip()[:60]
+            perspective = cd.get("perspective_text", "")
+            rejected_opts = list(cd.get("rejected_options", []))
+            rejected_biases = list(cd.get("rejected_biases", []))
+            if perspective and perspective not in rejected_opts:
+                rejected_opts.append(perspective)
+            conv_hist_r = list(cd.get("conversation_history", []))
+            conv_hist_r.append({"role": "user", "content": f"[confidence: {conf_val}% — option rejected]"})
+            new_round_r = cd.get("rounds", 0) + 1
+            rl_r = list(cd.get("rounds_log", []))
+            rl_r.append({
+                "round": new_round_r, "round_number": new_round_r,
+                "round_state": "counterattack_rejected",
+                "timestamp": datetime.now().isoformat(),
+                "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                "perspective": perspective, "question": "",
+                "conversation_message": cd.get("counterattack_message", ""),
+                "followups": [], "answer": f"[confidence: {conf_val}%]",
+                "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                "how_shifted": "", "leaning": cd.get("leaning", ""),
+                "confidence": conf_val, "shift": 0, "confidence_shift": 0,
+            })
+            loop_ctx = (
+                f"Previously tried bias: '{bias_tried}'. "
+                f"Option proposed: '{perspective}'. "
+                f"User gave only {conf_val}% confidence — below their starting level. Option rejected. "
+                f"Explore a DIFFERENT angle."
+            )
+            st.session_state["_ca_partial_mode"] = False
+            st.session_state["_ca_partial_conf"] = None
+            st.session_state["_ca_pending_conf"] = None
+            st.session_state["_ca_explore_above"] = False
+            st.session_state["_partial_probe_question"] = ""
+            st.session_state["_listening_clarification"] = None
+            st.session_state.current_decision = {
+                "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
+                "context": cd.get("context", ""), "options": cd["options"],
+                "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
+                "confidence_before": conf_val, "confidence_start": cd["confidence_start"],
+                "timestamp": cd["timestamp"], "rounds": new_round_r,
+                "rounds_log": rl_r,
+                "last_answer": f"[confidence: {conf_val}%]",
+                "conversation_history": conv_hist_r,
+                "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
+                "extra_listening": 2, "rejected_biases": rejected_biases,
+                "rejected_options": rejected_opts, "confirmed_bias": "",
+                "loop_context": loop_ctx, "answer_signals": {},
+                "counterattack_exchanges": [],
+                "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
+            }
             st.session_state.phase = "generating"
             st.rerun()
+
+        # ── Block 2: Option suggested + confidence slider ─────────────────────
+        st.markdown("")
+        with st.container(border=True):
+            st.markdown("**Option suggested**")
+            st.markdown(counterattack_msg)
+            st.markdown("")
+
+            if ca_pending_conf is None:
+                # Phase 1 — slider
+                conf_val = st.slider(
+                    "How much does this feel like it could work for you?",
+                    0, 100, confidence_start, 5,
+                    key=f"spark_ca_conf_{round_num}"
+                )
+                badge(conf_val)
+                st.markdown("")
+                if st.button("→ Submit", key=f"spark_ca_submit_{round_num}",
+                             type="primary", use_container_width=True):
+                    if conf_val <= confidence_start:
+                        _go_rejected_from_spark(conf_val)
+                    else:
+                        st.session_state["_ca_pending_conf"] = conf_val
+                        st.rerun()
+            else:
+                # Phase 2 — threshold routing
+                conf_val = ca_pending_conf
+                explore_above = st.session_state.get("_ca_explore_above", False)
+                perspective_option = cd.get("perspective_text", "")
+
+                if st.session_state.get("_ca_partial_mode"):
+                    probe_q = st.session_state.get("_partial_probe_question", "")
+                    if not probe_q:
+                        with st.spinner(""):
+                            probe_q = get_partial_probe(
+                                cd.get("perspective_text", ""),
+                                cd.get("confirmed_bias", "") or cd.get("bias_text", ""),
+                                cd.get("conversation_history", []),
+                                enriched_profile_str,
+                                above_threshold=explore_above
+                            ) or "What's coming up for you when you imagine actually going with this?"
+                        st.session_state["_partial_probe_question"] = probe_q
+                    with st.chat_message("assistant", avatar="🧑‍🏫"):
+                        st.markdown(probe_q)
+                    scroll_to_chat_bottom()
+                    partial_reply = st.chat_input(
+                        "What's coming up for you?",
+                        key=f"spark_ca_partial_{round_num}"
+                    )
+                    if partial_reply and partial_reply.strip():
+                        partial_answer = partial_reply.strip()
+                        conf_val_p = st.session_state.get("_ca_partial_conf", confidence_start)
+                        perspective = cd.get("perspective_text", "")
+                        conv_hist_p = list(cd.get("conversation_history", []))
+                        conv_hist_p.append({"role": "assistant", "content": probe_q})
+                        conv_hist_p.append({"role": "user", "content": partial_answer})
+                        new_round_p = cd.get("rounds", 0) + 1
+                        rl_p = list(cd.get("rounds_log", []))
+                        rl_p.append({
+                            "round": new_round_p, "round_number": new_round_p,
+                            "round_state": "counterattack_partial",
+                            "timestamp": datetime.now().isoformat(),
+                            "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                            "perspective": perspective, "question": probe_q,
+                            "conversation_message": cd.get("counterattack_message", ""),
+                            "followups": [], "answer": partial_answer,
+                            "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
+                            "answer_key_signal": "", "shifted": False, "still_undecided": False,
+                            "how_shifted": "", "leaning": cd.get("leaning", ""),
+                            "confidence": conf_val_p, "shift": 0, "confidence_shift": 0,
+                        })
+                        if explore_above:
+                            loop_ctx = (
+                                f"Option proposed: '{perspective}' ({conf_val_p}% confidence — above clarity bar). "
+                                f"User chose to explore further. They said: '{partial_answer}'. "
+                                f"Ask 2 focused questions about what specifically is in the way of full commitment, "
+                                f"then propose a refined or adapted version of the same option. "
+                                f"Do NOT abandon the option entirely — refine it."
+                            )
+                        else:
+                            loop_ctx = (
+                                f"Option proposed: '{perspective}' ({conf_val_p}% confidence). "
+                                f"User said this didn't fully land: '{partial_answer}'. "
+                                f"Ask 2 questions to gather new signal, then spark again with a refined or different bias."
+                            )
+                        st.session_state["_ca_partial_mode"] = False
+                        st.session_state["_ca_partial_conf"] = None
+                        st.session_state["_ca_pending_conf"] = None
+                        st.session_state["_ca_explore_above"] = False
+                        st.session_state["_partial_probe_question"] = ""
+                        st.session_state.current_decision = {
+                            "decision": cd["decision"], "decision_short": cd.get("decision_short", ""),
+                            "context": cd.get("context", ""), "options": cd["options"],
+                            "leaning": cd.get("leaning", ""), "is_undecided": cd.get("is_undecided", False),
+                            "confidence_before": conf_val_p, "confidence_start": cd["confidence_start"],
+                            "timestamp": cd["timestamp"], "rounds": new_round_p,
+                            "rounds_log": rl_p, "last_answer": partial_answer,
+                            "conversation_history": conv_hist_p,
+                            "capcs_state": "listening", "listening_answers": cd.get("listening_answers", 0),
+                            "extra_listening": 2, "rejected_biases": cd.get("rejected_biases", []),
+                            "rejected_options": cd.get("rejected_options", []), "confirmed_bias": "",
+                            "loop_context": loop_ctx, "answer_signals": {},
+                            "counterattack_exchanges": [],
+                            "pre_identified_bias": "", "disambiguation_question": "", "bias_candidates": [],
+                        }
+                        st.session_state.phase = "generating"
+                        st.rerun()
+
+                elif conf_val >= CONFIDENCE_THRESHOLD:
+                    st.markdown(
+                        f"You're at **{conf_val}% confidence** about *{perspective_option}* — "
+                        f"not full certainty yet, but enough to move forward if you're ready. "
+                        f"Do you want to continue, or keep exploring?"
+                    )
+                    scroll_to_chat_bottom()
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("→ Continue", key=f"spark_ca_above_continue_{round_num}",
+                                     type="primary", use_container_width=True):
+                            _go_conviction_from_spark(conf_val)
+                    with col2:
+                        if st.button("Explore further", key=f"spark_ca_above_explore_{round_num}",
+                                     use_container_width=True):
+                            st.session_state["_ca_partial_mode"] = True
+                            st.session_state["_ca_partial_conf"] = conf_val
+                            st.session_state["_ca_explore_above"] = True
+                            st.rerun()
+
+                else:
+                    st.markdown(
+                        f"You're at **{conf_val}% confidence** with this option. "
+                        f"Does that feel like enough to move forward, or would you like to explore further?"
+                    )
+                    scroll_to_chat_bottom()
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("I'm happy with this", key=f"spark_ca_partial_happy_{round_num}",
+                                     type="primary", use_container_width=True):
+                            _go_conviction_from_spark(conf_val)
+                    with col2:
+                        if st.button("Explore further", key=f"spark_ca_partial_explore_{round_num}",
+                                     use_container_width=True):
+                            st.session_state["_ca_partial_mode"] = True
+                            st.session_state["_ca_partial_conf"] = conf_val
+                            st.session_state["_ca_explore_above"] = False
+                            st.rerun()
 
     # ══════════════════════════════════════════════════════════════════════════
     # STATE: COUNTERATTACK
