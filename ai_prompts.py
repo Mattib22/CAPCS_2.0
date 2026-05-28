@@ -268,7 +268,8 @@ def get_challenge_response(decision, options, leaning, confidence, profile_str,
                            history, last_answer, context, longitudinal="",
                            emotion="neutral", turn_num=2,
                            is_undecided=False, confidence_dropped=False,
-                           sustained_drop=False, confirmed_bias=""):
+                           sustained_drop=False, confirmed_bias="",
+                           bias_resonance="full"):
     """
     State: counterattack. User confirmed a bias. Introduce the direct antidote option.
     Also returns extractable structured fields in a hidden block for Supabase.
@@ -318,6 +319,11 @@ The option must be grounded in what the user said in the conversation — includ
 
 Max 80 words total. No re-explanation of the bias — the spark already did that. Start directly with the option.
 Do NOT ask a question at the end — a confidence slider will follow your message.
+
+The user's response to the bias was: {bias_resonance} ("full" / "partial" / "none")
+- full: standard counterattack — write as normal
+- partial: open with "Even if that pattern doesn't feel completely like yours..." then continue with the option
+- none: open with "Setting that aside — here's a different way to look at this..." and frame the option as a fresh angle, not a confirmation of the bias
 
 Tone: warm, direct."""
 
@@ -737,10 +743,12 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
     if pre_identified_bias:
         prompt = f"""The active cognitive bias in this conversation has been identified as: {pre_identified_bias}
 
+Write the spark message as a hypothesis, not a diagnosis. Use words like "might", "could be", "there's a pattern that might be at play here." Never write "this bias is making you" or "you are experiencing X." The tone should feel like a perceptive friend noticing something, not a clinician delivering a verdict. The bias name appears naturally mid-sentence, not as a label.
+
 Write a spark message of 2-3 sentences (max 60 words) that:
-1. Opens with a direct observation about the specific thinking pattern visible in the conversation
-2. Names '{pre_identified_bias}' naturally mid-sentence as a revelation: "that pull toward X is called {pre_identified_bias}" or "this pattern is called {pre_identified_bias}"
-3. Explains in one sentence what it's doing to their thinking right now
+1. Opens with a tentative observation about the specific thinking pattern visible in the conversation — use hedging language ("there might be", "one pattern that could be at play", "it seems like there's a pull here")
+2. Names '{pre_identified_bias}' naturally mid-sentence as a possibility: "this might be {pre_identified_bias}" or "there's a pattern here that could be {pre_identified_bias}"
+3. Suggests in one sentence what it might be doing to their thinking — use conditional language ("which might be making...", "this could be why...")
 
 Do NOT introduce any option or ask a question.
 Write in second person only.
@@ -781,10 +789,12 @@ SELECTION PROCESS — follow these steps in order:
 If no bias from this list is clearly earned from the full conversation, respond with exactly:
 SIGNAL_INSUFFICIENT
 
+Write the spark message as a hypothesis, not a diagnosis. Use words like "might", "could be", "there's a pattern that might be at play here." Never write "this bias is making you" or "you are experiencing X." The tone should feel like a perceptive friend noticing something, not a clinician delivering a verdict. The bias name appears naturally mid-sentence, not as a label.
+
 Otherwise write a spark message of 2-3 sentences (max 60 words) that:
-1. Opens with an observation about their thinking — not a quote or paraphrase of what they said
-2. Names the bias naturally mid-sentence as a revelation: "that pull toward X is called Y" or "this pattern is called Y"
-3. Explains in one sentence what this bias is doing to their thinking right now
+1. Opens with a tentative observation about their thinking — not a quote or paraphrase of what they said; use hedging language ("there might be", "one pattern that could be at play")
+2. Names the bias naturally mid-sentence as a possibility: "this might be Y" or "there's a pattern here that could be Y"
+3. Suggests in one sentence what this bias might be doing to their thinking — use conditional language ("which might be making...", "this could be why...")
 
 Do NOT introduce any new option. Do NOT ask a question.
 Write in second person only. Never write "The user" or refer to the user in third person.
@@ -1157,7 +1167,7 @@ PROFILE:
 {profile_str}
 
 Output only the question."""
-    return ask_ai(prompt, 200)
+    return ask_ai(prompt, 400)
 
 
 def identify_candidate_biases(conversation_history: list, profile_str: str,
@@ -1279,7 +1289,7 @@ PROFILE:
 {profile_str}
 
 Output only the question."""
-    return ask_ai(prompt, 200)
+    return ask_ai(prompt, 400)
 
 
 def get_personalised_suggestions(final_choice: str, confirmed_bias: str,

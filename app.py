@@ -956,7 +956,8 @@ elif st.session_state.phase == "generating":
             if r.get("round_state") == "spark":
                 bias_n = r.get("bias", "").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    with st.expander("💡 What I noticed in your thinking", expanded=True):
+                    expander_title = f"What is '{bias_n}'?" if bias_n else "What is this pattern?"
+                    with st.expander(expander_title, expanded=True):
                         st.markdown(f"**{bias_n}**")
                         st.markdown(r.get("explanation", ""))
         ans = r.get("answer", "")
@@ -1065,6 +1066,7 @@ elif st.session_state.phase == "generating":
 
         elif capcs_state == "counterattack":
             confirmed_bias = cd.get("confirmed_bias", "")
+            bias_resonance = cd.get("bias_resonance", "full")
             full_response = get_challenge_response(
                 cd["decision"], cd["options"], cd.get("leaning", ""),
                 cd.get("confidence_before", cd.get("confidence_start", 50)), enriched_profile_str,
@@ -1073,7 +1075,8 @@ elif st.session_state.phase == "generating":
                 is_undecided=is_undecided,
                 confidence_dropped=confidence_dropped,
                 sustained_drop=sustained_drop,
-                confirmed_bias=confirmed_bias
+                confirmed_bias=confirmed_bias,
+                bias_resonance=bias_resonance
             )
             conversation_message = get_conversation_message(full_response)
             fields = extract_challenge_fields(full_response)
@@ -1135,7 +1138,8 @@ elif st.session_state.phase == "challenge":
             if r.get("round_state") == "spark":
                 bias_n = r.get("bias", "").split("—")[0].strip()[:60]
                 if bias_n and r.get("explanation"):
-                    with st.expander("💡 What I noticed in your thinking", expanded=True):
+                    expander_title = f"What is '{bias_n}'?" if bias_n else "What is this pattern?"
+                    with st.expander(expander_title, expanded=True):
                         st.markdown(f"**{bias_n}**")
                         st.markdown(r.get("explanation", ""))
         ans = r.get("answer", "")
@@ -1357,7 +1361,8 @@ elif st.session_state.phase == "challenge":
 
         # Always-visible section — not a collapsed expander
         with st.container(border=True):
-            st.markdown("💡 **What I noticed in your thinking**")
+            section_title = f"What is '{bias_name_short}'?" if bias_name_short else "What is this pattern?"
+            st.markdown(f"**{section_title}**")
             if bias_name_short:
                 st.markdown(f"**{bias_name_short}**")
             st.markdown(cd.get("explanation_text", ""))
@@ -1391,6 +1396,7 @@ elif st.session_state.phase == "challenge":
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
             new_cd["confirmed_bias"] = bias_name_short
+            new_cd["bias_resonance"] = "full"
             new_cd["capcs_state"] = "counterattack"
             new_cd["counterattack_exchanges"] = []
             st.session_state.current_decision = new_cd
@@ -1398,7 +1404,6 @@ elif st.session_state.phase == "challenge":
             st.rerun()
 
         if partially:
-            # Partially → back to listening; first question asks what part didn't resonate
             save_bias_correction(uk, bias_name_short, "partial", "")
             new_round = cd.get("rounds", 0) + 1
             rounds_log = cd.get("rounds_log", [])
@@ -1415,25 +1420,13 @@ elif st.session_state.phase == "challenge":
                 "how_shifted": "", "leaning": cd.get("leaning", ""),
                 "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
             })
-            loop_ctx = (
-                f"Bias identified: '{bias_name_short}'. "
-                f"User said it PARTIALLY resonated. "
-                f"First, ask what part specifically didn't resonate. "
-                f"After 2 answers, spark again with a refined or different bias."
-            )
-            rejected_partial = list(cd.get("rejected_biases", []))
-            if bias_name_short and bias_name_short not in rejected_partial:
-                rejected_partial.append(bias_name_short)
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
-            new_cd["rejected_biases"] = rejected_partial
-            new_cd["extra_listening"] = 2
-            new_cd["capcs_state"] = "listening"
-            new_cd["loop_context"] = loop_ctx
-            new_cd["pre_identified_bias"] = ""
-            new_cd["disambiguation_question"] = ""
-            new_cd["bias_candidates"] = []
+            new_cd["confirmed_bias"] = bias_name_short
+            new_cd["bias_resonance"] = "partial"
+            new_cd["capcs_state"] = "counterattack"
+            new_cd["counterattack_exchanges"] = []
             st.session_state.current_decision = new_cd
             st.session_state.phase = "generating"
             st.rerun()
@@ -1455,24 +1448,17 @@ elif st.session_state.phase == "challenge":
                 "how_shifted": "", "leaning": cd.get("leaning", ""),
                 "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
             })
-            rejected = cd.get("rejected_biases", [])
-            if bias_name_short not in rejected:
+            rejected = list(cd.get("rejected_biases", []))
+            if bias_name_short and bias_name_short not in rejected:
                 rejected.append(bias_name_short)
-            loop_ctx = (
-                f"Previously tried bias: '{bias_name_short}'. "
-                f"User said it doesn't resonate. "
-                f"Explore a DIFFERENT angle — do not revisit this bias."
-            )
             new_cd = dict(cd)
             new_cd["rounds"] = new_round
             new_cd["rounds_log"] = rounds_log
-            new_cd["rejected_biases"] = rejected
-            new_cd["extra_listening"] = 2
-            new_cd["capcs_state"] = "listening"
-            new_cd["loop_context"] = loop_ctx
-            new_cd["pre_identified_bias"] = ""
-            new_cd["disambiguation_question"] = ""
-            new_cd["bias_candidates"] = []
+            new_cd["rejected_biases"] = rejected  # session-scoped only — never written to Supabase
+            new_cd["confirmed_bias"] = bias_name_short
+            new_cd["bias_resonance"] = "none"
+            new_cd["capcs_state"] = "counterattack"
+            new_cd["counterattack_exchanges"] = []
             st.session_state.current_decision = new_cd
             st.session_state.phase = "generating"
             st.rerun()
