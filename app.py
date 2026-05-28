@@ -1388,41 +1388,45 @@ elif st.session_state.phase == "challenge":
                 st.markdown(f"What is **{bias_name_short}**?")
             st.markdown(cd.get("explanation_text", ""))
             st.markdown("")
-            kb = f"spark_{bias_name_short[:15].replace(' ','_')}_{round_num}"
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                resonates = st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True)
-            with col2:
-                partially = st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True)
-            with col3:
-                doesnt_fit = st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True)
+            _current_resonance = cd.get("bias_resonance", "")
+            if _current_resonance:
+                _label_map = {"full": "✅ Resonates", "partial": "🔶 Partially", "none": "❌ Doesn't fit"}
+                st.caption(f"Your response: {_label_map.get(_current_resonance, _current_resonance)}")
+            else:
+                kb = f"spark_{bias_name_short[:15].replace(' ','_')}_{round_num}"
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    resonates = st.button("✅ Resonates", key=f"{kb}_yes", use_container_width=True)
+                with col2:
+                    partially = st.button("🔶 Partially", key=f"{kb}_partial", use_container_width=True)
+                with col3:
+                    doesnt_fit = st.button("❌ Doesn't fit", key=f"{kb}_no", use_container_width=True)
 
-        # Feedback-only handlers — record verdict, stay on this page
-        if resonates:
-            save_bias_correction(uk, bias_name_short, "accurate", "")
-            new_cd = dict(cd)
-            new_cd["bias_resonance"] = "full"
-            new_cd["confirmed_bias"] = bias_name_short
-            st.session_state.current_decision = new_cd
-            st.rerun()
-        if partially:
-            save_bias_correction(uk, bias_name_short, "partial", "")
-            new_cd = dict(cd)
-            new_cd["bias_resonance"] = "partial"
-            new_cd["confirmed_bias"] = bias_name_short
-            st.session_state.current_decision = new_cd
-            st.rerun()
-        if doesnt_fit:
-            save_bias_correction(uk, bias_name_short, "inaccurate", "")
-            rejected = list(cd.get("rejected_biases", []))
-            if bias_name_short and bias_name_short not in rejected:
-                rejected.append(bias_name_short)
-            new_cd = dict(cd)
-            new_cd["bias_resonance"] = "none"
-            new_cd["confirmed_bias"] = bias_name_short
-            new_cd["rejected_biases"] = rejected
-            st.session_state.current_decision = new_cd
-            st.rerun()
+                if resonates:
+                    save_bias_correction(uk, bias_name_short, "accurate", "")
+                    new_cd = dict(cd)
+                    new_cd["bias_resonance"] = "full"
+                    new_cd["confirmed_bias"] = bias_name_short
+                    st.session_state.current_decision = new_cd
+                    st.rerun()
+                if partially:
+                    save_bias_correction(uk, bias_name_short, "partial", "")
+                    new_cd = dict(cd)
+                    new_cd["bias_resonance"] = "partial"
+                    new_cd["confirmed_bias"] = bias_name_short
+                    st.session_state.current_decision = new_cd
+                    st.rerun()
+                if doesnt_fit:
+                    save_bias_correction(uk, bias_name_short, "inaccurate", "")
+                    rejected = list(cd.get("rejected_biases", []))
+                    if bias_name_short and bias_name_short not in rejected:
+                        rejected.append(bias_name_short)
+                    new_cd = dict(cd)
+                    new_cd["bias_resonance"] = "none"
+                    new_cd["confirmed_bias"] = bias_name_short
+                    new_cd["rejected_biases"] = rejected
+                    st.session_state.current_decision = new_cd
+                    st.rerun()
 
         # ── Routing helpers ───────────────────────────────────────────────────
         def _go_conviction_from_spark(conf_val):
