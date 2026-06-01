@@ -1628,35 +1628,38 @@ elif st.session_state.phase == "challenge":
                     st.markdown(_exc.get("question", ""))
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(_exc.get("answer", ""))
-            with st.expander("💬 Have a question about this option?", expanded=False):
-                _ca_q = st.text_area(
-                    "Ask CASPER",
+            # Always-visible input — no expander so replies feel natural
+            st.caption("💬 Ask CASPER about this option (optional)")
+            _ca_col1, _ca_col2 = st.columns([5, 1])
+            with _ca_col1:
+                _ca_q = st.text_input(
+                    "Question",
                     key=f"ca_followup_q_{round_num}_{len(_ca_exchanges)}",
-                    height=70, label_visibility="collapsed",
-                    placeholder="e.g. What would this look like in practice? Does this conflict with what I said earlier?"
+                    label_visibility="collapsed",
+                    placeholder="Ask a question or push back on this option…"
                 )
-                if st.button("Ask", key=f"ca_followup_btn_{round_num}_{len(_ca_exchanges)}", use_container_width=True):
-                    if _ca_q.strip():
-                        with st.spinner(""):
-                            _ca_ans = get_counterattack_followup(
-                                _ca_q.strip(),
-                                cd.get("perspective_text", "") or counterattack_msg,
-                                cd.get("conversation_history", []),
-                                enriched_profile_str,
-                            )
-                        # Fallback if response is truncated (doesn't end with sentence punctuation)
-                        if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
-                            _ca_ans = "That's worth exploring. What would a first concrete step toward this option actually look like for you?"
-                        _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
-                        _new_hist = list(cd.get("conversation_history", [])) + [
-                            {"role": "user", "content": _ca_q.strip()},
-                            {"role": "assistant", "content": _ca_ans},
-                        ]
-                        _new_cd = dict(cd)
-                        _new_cd["counterattack_exchanges"] = _new_exc
-                        _new_cd["conversation_history"] = _new_hist
-                        st.session_state.current_decision = _new_cd
-                        st.rerun()
+            with _ca_col2:
+                _ask_clicked = st.button("Ask", key=f"ca_followup_btn_{round_num}_{len(_ca_exchanges)}", use_container_width=True)
+            if _ask_clicked and _ca_q.strip():
+                with st.spinner(""):
+                    _ca_ans = get_counterattack_followup(
+                        _ca_q.strip(),
+                        cd.get("perspective_text", "") or counterattack_msg,
+                        cd.get("conversation_history", []),
+                        enriched_profile_str,
+                    )
+                if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
+                    _ca_ans = "That's worth exploring. What would a first concrete step toward this option actually look like for you?"
+                _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
+                _new_hist = list(cd.get("conversation_history", [])) + [
+                    {"role": "user", "content": _ca_q.strip()},
+                    {"role": "assistant", "content": _ca_ans},
+                ]
+                _new_cd = dict(cd)
+                _new_cd["counterattack_exchanges"] = _new_exc
+                _new_cd["conversation_history"] = _new_hist
+                st.session_state.current_decision = _new_cd
+                st.rerun()
             st.markdown("")
 
             if ca_pending_conf is None:
