@@ -2083,18 +2083,40 @@ elif st.session_state.phase == "report":
             r.get("perspective","")
             for r in rounds_log_s if r.get("perspective") and r.get("round_state") == "counterattack"
         ))
+        what_shifted = next(
+            (r.get("answer","") for r in rounds_log_s
+             if r.get("round_state") == "conviction"
+             and r.get("answer","") and not r.get("answer","").startswith("[")),
+            ""
+        )
+        suggestions = st.session_state.get("_conviction_suggestions", "")
         bias_cycles = len(biases_found) or last.get("rounds_completed", 1)
         st.markdown(f"**Rounds:** {bias_cycles} bias {'cycle' if bias_cycles == 1 else 'cycles'} explored")
-        if biases_found or options_proposed:
-            bias_str = " and ".join(biases_found) if biases_found else "a cognitive pattern"
-            opt_str  = " and ".join(f'"{o}"' for o in options_proposed if o) if options_proposed else "an alternative path"
-            summary_txt = (
-                f"CASPER identified <b>{bias_str}</b> as the main pattern shaping your thinking. "
-                f"The session proposed {opt_str} as a way to break that pattern. "
-                f"You landed on <b>{last.get('final_choice','—')}</b> with "
-                f"<b>{last.get('confidence_final',0)}% clarity</b>."
+
+        # ── Rich summary card ─────────────────────────────────────────────────
+        sections = []
+        if biases_found:
+            bias_str = " and ".join(f"<b>{b}</b>" for b in biases_found)
+            sections.append(f"🔍 <b>What CASPER identified</b><br>{bias_str} as the main pattern shaping your thinking.")
+        if options_proposed:
+            opt_str = ", ".join(f'"{o}"' for o in options_proposed if o)
+            sections.append(f"💡 <b>What CASPER proposed</b><br>{opt_str}.")
+        if what_shifted:
+            sections.append(f"🔄 <b>What shifted for you</b><br>{what_shifted}")
+        final = last.get('final_choice','—')
+        conf = last.get('confidence_final', 0)
+        sections.append(f"📍 <b>Where you landed</b><br><b>{final}</b> with <b>{conf}% clarity</b>.")
+        if suggestions:
+            sections.append(f"✨ <b>Next steps CASPER suggested</b><br>{suggestions}")
+
+        if sections:
+            st.markdown(
+                "<div style='background:#f0fdf4;border-left:3px solid #16a34a;padding:14px 18px;"
+                "border-radius:0 8px 8px 0;margin:8px 0'>"
+                + "<br><br>".join(sections)
+                + "</div>",
+                unsafe_allow_html=True
             )
-            box(summary_txt, style="info")
 
         # Longitudinal summary card
         history_all = load_log()
