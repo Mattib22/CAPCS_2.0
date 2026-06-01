@@ -19,6 +19,7 @@ from ai_prompts import (ask_ai, get_opening_question, get_probing_question, get_
                          get_session_recommendation, get_bias_analysis, classify_domain,
                          get_spark_message, extract_spark_fields,
                          get_personalised_suggestions, get_partial_probe,
+                         get_counterattack_followup,
                          identify_candidate_biases, get_disambiguation_question)
 from user_model import (compute_confidence_threshold, build_observed_profile, format_profile,
                          build_longitudinal_context, QUESTIONS)
@@ -1581,6 +1582,41 @@ elif st.session_state.phase == "challenge":
         with st.container(border=True):
             st.markdown("**Option suggested**")
             st.markdown(counterattack_msg)
+            st.markdown("")
+
+            # ── Optional Q&A about the option ─────────────────────────────────
+            _ca_exchanges = cd.get("counterattack_exchanges", [])
+            for _exc in _ca_exchanges:
+                with st.chat_message("user", avatar="👤"):
+                    st.markdown(_exc.get("question", ""))
+                with st.chat_message("assistant", avatar="🧑‍🏫"):
+                    st.markdown(_exc.get("answer", ""))
+            with st.expander("💬 Have a question about this option?", expanded=False):
+                _ca_q = st.text_area(
+                    "Ask CASPER",
+                    key=f"ca_followup_q_{round_num}_{len(_ca_exchanges)}",
+                    height=70, label_visibility="collapsed",
+                    placeholder="e.g. What would this look like in practice? Does this conflict with what I said earlier?"
+                )
+                if st.button("Ask", key=f"ca_followup_btn_{round_num}_{len(_ca_exchanges)}", use_container_width=True):
+                    if _ca_q.strip():
+                        with st.spinner(""):
+                            _ca_ans = get_counterattack_followup(
+                                _ca_q.strip(),
+                                cd.get("perspective_text", "") or counterattack_msg,
+                                cd.get("conversation_history", []),
+                                enriched_profile_str,
+                            )
+                        _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
+                        _new_hist = list(cd.get("conversation_history", [])) + [
+                            {"role": "user", "content": _ca_q.strip()},
+                            {"role": "assistant", "content": _ca_ans},
+                        ]
+                        _new_cd = dict(cd)
+                        _new_cd["counterattack_exchanges"] = _new_exc
+                        _new_cd["conversation_history"] = _new_hist
+                        st.session_state.current_decision = _new_cd
+                        st.rerun()
             st.markdown("")
 
             if ca_pending_conf is None:

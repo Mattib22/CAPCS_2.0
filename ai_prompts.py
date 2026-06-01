@@ -1181,6 +1181,35 @@ def extract_counterattack_signal(response: str) -> dict:
         return default
 
 
+def get_counterattack_followup(question: str, option_proposed: str,
+                               conversation_history: list, profile_str: str) -> str:
+    """
+    Brief response to a user question about the counterattack option.
+    Stays focused on the proposed option — does not open new territory.
+    """
+    history_text = "\n".join([
+        f"{'CASPER' if m['role'] == 'assistant' else 'USER'}: {m['content']}"
+        for m in conversation_history[-8:]
+    ])
+    prompt = f"""You are CASPER, a psychologist-style thinking partner.
+You proposed this option to the user: {option_proposed}
+
+The user has a question or comment about it:
+USER: {question}
+
+Respond in 1-3 sentences. Stay focused on this specific option — do not introduce new options or shift to a different topic.
+Be warm and direct. Help the user think more clearly about whether this option fits their situation.
+
+RECENT CONVERSATION:
+{history_text}
+
+PROFILE:
+{profile_str}
+
+Output only your response."""
+    return ask_ai(prompt, 300) or "What specifically feels uncertain about this option for you?"
+
+
 def get_partial_probe(option_proposed: str, confirmed_bias: str,
                        conversation_history: list, profile_str: str,
                        above_threshold: bool = False) -> str:
