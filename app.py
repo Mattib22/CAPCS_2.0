@@ -1387,24 +1387,19 @@ elif st.session_state.phase == "challenge":
                     _filled = min(10, _pct // 10)
                     _bar = "█" * _filled + "░" * (10 - _filled)
                     _style = "font-weight:600;" if _is_top else "color:#6b7280;"
-                    _dim_prefix = f"<span style='font-size:10px;color:#9ca3af;margin-right:6px'>D{_dim} {_dim_label}</span>" if _dim else ""
+                    _dim_tag = (f"<div style='font-size:10px;color:#9ca3af;margin-bottom:1px'>"
+                                f"D{_dim} — {_dim_label}</div>") if _dim else ""
                     st.markdown(
-                        f"<div style='font-size:13px;{_style}margin-bottom:4px'>"
-                        f"{_dim_prefix}{_name} &nbsp; <code>{_bar}</code> {_pct}%<br>"
-                        f"<span style='font-size:11px;font-weight:400;color:#9ca3af'>"
-                        f"{_c.get('evidence','')}</span></div>",
+                        f"<div style='margin-bottom:8px'>"
+                        f"{_dim_tag}"
+                        f"<span style='font-size:13px;{_style}'>"
+                        f"{_name} &nbsp; <code>{_bar}</code> {_pct}%</span>"
+                        + (f"<br><span style='font-size:11px;color:#9ca3af'>{_c['evidence']}</span>"
+                           if _c.get("evidence") else "")
+                        + "</div>",
                         unsafe_allow_html=True
                     )
                 st.markdown("---")
-
-            _dbg_raw = st.session_state.get("_debug_raw_diagnostic", "")
-            _dbg_err = st.session_state.get("_ask_ai_last_error", "")
-            if _dbg_raw or _dbg_err:
-                st.warning(
-                    f"**[DEBUG] raw diagnostic:** {_dbg_raw or 'empty'}  \n"
-                    f"**[DEBUG] api error:** {_dbg_err or 'none'}  \n"
-                    f"**[DEBUG] candidates:** {st.session_state.get('_debug_candidates')}"
-                )
             st.markdown("**What CASPER observed**")
             st.markdown(conversation_msg)
             st.markdown("---")
