@@ -1253,51 +1253,47 @@ DIMENSION 1 BIASES: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overc
 DIMENSION 2 BIASES: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias
 DIMENSION 3 BIASES: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias
 
-For each dimension pick the best-fitting bias, score confidence 1-10 (10=very strong evidence, 1=weak/speculative), and quote the user's exact words.
-If a dimension has no clear signal, still pick the most plausible bias and score it 1-2.
+Output exactly 3 lines — one per dimension in order D1, D2, D3.
+Each line: bias name, score (1-10), one short evidence quote separated by |
+Score meaning: 8-10 strong, 5-7 moderate, 1-4 weak.
 
-Return a JSON array with exactly 3 objects:
-[
-  {{"bias": "bias name from D1", "dimension": 1, "evidence": "exact user quote", "score": 7}},
-  {{"bias": "bias name from D2", "dimension": 2, "evidence": "exact user quote", "score": 4}},
-  {{"bias": "bias name from D3", "dimension": 3, "evidence": "exact user quote", "score": 9}}
-]"""
+Example output:
+Projection Bias | 6 | I keep thinking I will feel the same way
+Anticipated Regret | 4 | I don't want to regret not trying
+False Dichotomy | 9 | Either I travel or I settle"""
 
-    result = ask_ai(prompt, 600, json_mode=True)
-    # Store raw result for debugging
+    result = ask_ai(prompt, 300)
     try:
         import streamlit as _st
-        _st.session_state["_debug_raw_diagnostic"] = result[:400] if result else "<empty>"
-        _st.session_state["_debug_candidates"] = None  # reset, will be set after parse
+        _st.session_state["_debug_raw_diagnostic"] = repr(result[:300]) if result else "<empty>"
     except Exception:
         pass
     try:
         if not result or not result.strip():
             return []
-        stripped = result.strip()
-        if stripped.startswith("```"):
-            stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
-        parsed = _json.loads(stripped)
-        if not isinstance(parsed, list):
-            return []
         valid = []
-        for item in parsed:
-            if isinstance(item, dict) and item.get("bias", "").strip():
-                score = max(1, min(10, int(item.get("score", 1))))
-                dim = int(item.get("dimension", 0))
-                if dim in (1, 2, 3):
-                    valid.append({
-                        "bias": item["bias"].strip(),
-                        "dimension": dim,
-                        "evidence": item.get("evidence", "").strip(),
-                        "score": score,
-                    })
+        dim = 1
+        for line in result.strip().splitlines():
+            line = line.strip()
+            if not line or dim > 3:
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 2:
+                bias = parts[0].strip(" -•*1234567890.")
+                try:
+                    score = max(1, min(10, int(_re.search(r'\d+', parts[1]).group())))
+                except Exception:
+                    score = 5
+                evidence = parts[2].strip() if len(parts) >= 3 else ""
+                if bias:
+                    valid.append({"bias": bias, "dimension": dim, "evidence": evidence, "score": score})
+                    dim += 1
         valid.sort(key=lambda x: x["score"], reverse=True)
         return valid[:3]
     except Exception as e:
         try:
             import streamlit as _st
-            _st.session_state["_debug_raw_diagnostic"] += f" | parse_err: {e}"
+            _st.session_state["_debug_raw_diagnostic"] += f" | err:{e}"
         except Exception:
             pass
         return []
