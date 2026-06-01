@@ -1231,62 +1231,40 @@ USER ANSWERS:
 
 CONTEXT: {context}
 
-Dimension 1 (Wants & Values): Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect
-Dimension 2 (Fears & Protection): Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias
-Dimension 3 (Assumptions): False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias
+DIMENSION 1 BIASES: Sunk Cost Fallacy | Idealization Bias | Projection Bias | Overconfidence Bias | Halo Effect
+DIMENSION 2 BIASES: Anticipated Regret | Loss Aversion | Status Quo Bias | Omission Bias
+DIMENSION 3 BIASES: False Dichotomy | Overgeneralization | Constraint Fixation | Availability Heuristic | Confirmation Bias | Anchoring Bias | Social Proof Bias
 
-For each dimension pick the best-fitting bias, quote the user's exact words as evidence, and score confidence 1-10 (10=very strong evidence, 1=weak).
+For each dimension pick the best-fitting bias, score your confidence 1-10 (10=very strong, 1=weak/speculative), and quote the user's exact words as evidence.
 If a dimension shows no signal, still pick the most plausible bias and score it 1-2.
 
-Output ONLY this JSON array, nothing else:
-[{{"bias":"<name>","dimension":1,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":2,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":3,"evidence":"<quote>","score":<n>}}]"""
+Output exactly 3 lines, nothing else, in this format:
+D1: <bias name> | <score> | <exact quote from user>
+D2: <bias name> | <score> | <exact quote from user>
+D3: <bias name> | <score> | <exact quote from user>"""
 
-    result = ask_ai(prompt, 1200)
-    # Store raw result for debugging — remove once diagnostic is confirmed working
+    result = ask_ai(prompt, 400)
+    # Store raw result for debugging
     try:
         import streamlit as _st
-        _st.session_state["_debug_raw_diagnostic"] = result[:500] if result else "<empty>"
+        _st.session_state["_debug_raw_diagnostic"] = result[:300] if result else "<empty>"
     except Exception:
         pass
     try:
-        stripped = result.strip()
-        if not stripped:
-            return []
-        if stripped.startswith("```"):
-            stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
-        # Find the last [ that starts a complete JSON array — avoids stray
-        # brackets in any reasoning text Gemini may prepend
-        best_start, best_end = -1, -1
-        for m in _re.finditer(r'\[', stripped):
-            s = m.start()
-            depth, end = 0, -1
-            for i, ch in enumerate(stripped[s:], s):
-                if ch == "[": depth += 1
-                elif ch == "]":
-                    depth -= 1
-                    if depth == 0:
-                        end = i + 1; break
-            if end != -1:
-                try:
-                    candidate = _json.loads(stripped[s:end])
-                    if isinstance(candidate, list) and candidate:
-                        best_start, best_end = s, end  # keep the last valid array
-                except Exception:
-                    pass
-        if best_start == -1:
-            return []
-        parsed = _json.loads(stripped[best_start:best_end])
-        if not isinstance(parsed, list):
-            return []
         valid = []
-        for item in parsed:
-            if isinstance(item, dict) and "bias" in item:
-                score = max(1, min(10, int(item.get("score", 1))))
-                if item["bias"].strip():
+        for line in result.strip().splitlines():
+            line = line.strip()
+            m = _re.match(r'D([123])\s*:\s*(.+?)\s*\|\s*(\d+)\s*\|\s*(.+)', line)
+            if m:
+                dim = int(m.group(1))
+                bias = m.group(2).strip()
+                score = max(1, min(10, int(m.group(3))))
+                evidence = m.group(4).strip()
+                if bias:
                     valid.append({
-                        "bias": item["bias"].strip(),
-                        "dimension": int(item.get("dimension", 0)),
-                        "evidence": item.get("evidence", "").strip(),
+                        "bias": bias,
+                        "dimension": dim,
+                        "evidence": evidence,
                         "score": score,
                     })
         valid.sort(key=lambda x: x["score"], reverse=True)
