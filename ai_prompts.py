@@ -149,28 +149,37 @@ Your job is to ask ONE question. Count the USER messages in the conversation his
 
 ---
 
-QUESTION 1 — Dimension 1: surface what the user truly wants and values
+QUESTION 1 — Open what this decision is really about for them
 
 Step 1 — Find the emotionally loaded word in the decision text.
-Read the DECISION field only. Find the single word or short concept that carries the most emotional weight — a word the user chose that implies something about identity, freedom, belonging, security, or meaning. This word must come from what the user wrote, not from the profile. Do not invent a concept that is not in their text. Do NOT use the name of one of the options as the loaded word — "going to the pub" or "staying home" are options, not loaded concepts.
+Read the DECISION field only. Find the single word or short concept that carries the most personal weight — a word the user chose that implies something about identity, freedom, belonging, security, or meaning. This word must come from what the user wrote, not from the profile. Do not invent a concept not in their text. Do NOT use the name of one of the options as the loaded word — "going to the pub" or "staying home" are options, not loaded concepts.
 Examples of valid loaded words: "settle", "escape", "commit", "go back", "stay", "make it work", "give up", "finally".
-If the decision text contains no emotionally loaded word beyond the option names — for example "should I go to the pub or buy groceries" has no loaded word — then do NOT force a loaded word. Instead, ask what the option they are leaning towards represents for them more broadly: "What is going to the pub really about for you right now?" Do not probe a word that isn't there.
+If the decision text contains no emotionally loaded word beyond the option names, ask what the option they are leaning towards represents for them more broadly: "What is going to the pub really about for you?" Do not probe a word that isn't there.
 
 Step 2 — Find the profile friction.
-Read only the education, job, situation, and values fields. Find the one or two elements that together create real friction with this specific decision — something that makes the choice more complicated or more meaningful for this person specifically. A profile element creates friction only if it directly conflicts with or complicates one of the two options.
-Do NOT use the known_bias or blind spot field — that is a cognitive tendency, not a life circumstance that creates friction with a decision.
-Do not cite profile elements that apply equally to both options or that have no clear tension with the decision.
+Read only the education, job, situation, and values fields. Find the one or two elements that create real friction with this specific decision — something that makes the choice more complicated or meaningful for this person. A profile element creates friction only if it directly conflicts with or complicates one of the two options.
+Do NOT use the known_bias or blind spot field.
+Do not cite profile elements that apply equally to both options.
 
 Step 3 — Write the question.
 Write a short, warm message that:
 - Names both options naturally in one sentence
 - Weaves in the profile element(s) that create friction
-- Asks what the emotionally loaded word from Step 1 truly means to them personally, grounded in time ("at this point in your life" or "right now")
+- Asks what the emotionally loaded word from Step 1 means to them personally
+
+The question must NOT include any of the following — each one implies a specific bias pattern before the user has said anything:
+- "at this point in your life" / "right now" — implies comparing present self to future self (Projection Bias tell)
+- "what would you be giving up" — implies loss framing (Loss Aversion tell)
+- "how settled are you" / "how certain" — implies questioning their confidence (Overconfidence tell)
+- "what drew you to" / "what makes it appealing" — implies halo/idealization framing
+- "have you already invested" / "how much have you put in" — implies sunk cost framing
+
+Just ask what the loaded word means to them in the context of their specific situation. Let their answer introduce whatever frame is real for them.
 
 Gold standard example:
-"You're weighing continuing your travels in Australia against the idea of returning to Europe to settle, especially with your background in Cognitive Science and your current work in hospitality. What does 'settle' truly mean to you at this point in your life?"
+"You're weighing continuing your travels in Australia against the idea of returning to Europe to settle, especially with your background in Cognitive Science and your current work in hospitality. What does 'settle' genuinely mean for you in this situation?"
 
-Why this works: 'settle' comes directly from the user's decision text — it is not invented. Two profile elements create real tension with the decision (degree + current job). Temporal grounding present.
+Why this works: 'settle' comes from the user's own words. Profile elements create real tension. No temporal framing, no implied comparison, no suggestion of which pattern to confirm.
 
 ---
 
