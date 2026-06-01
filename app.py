@@ -1351,48 +1351,28 @@ elif st.session_state.phase == "challenge":
         # ── Block 1: Possible pattern identified ─────────────────────────────
         with st.container(border=True):
 
-            # ── Candidate biases — all shown with % and evidence ─────────────
+            # ── Candidate biases with likelihood % ───────────────────────────
             _candidates = cd.get("bias_candidates", [])
             if not _candidates and bias_name_short:
                 _candidates = [{"bias": bias_name_short, "score": 5, "evidence": ""}]
             if _candidates:
-                st.markdown("**Patterns CASPER detected in your reasoning**")
+                _top_name = _candidates[0].get("bias", bias_name_short)
+                st.markdown(f"The most likely pattern is **{_top_name}**")
                 st.markdown("")
-                for _i, _c in enumerate(_candidates):
+                for _c in _candidates:
                     _pct = max(0, min(100, int(_c.get("score", 0)) * 10))
                     _name = _c.get("bias", "")
                     _is_top = _name.split("—")[0].strip() == bias_name_short
-                    _evidence = _c.get("evidence", "")
-                    if _is_top:
-                        # Top bias — full card with accent border
-                        st.markdown(
-                            f"<div style='border-left:3px solid #7c3aed;padding:8px 12px;"
-                            f"margin-bottom:8px;border-radius:0 6px 6px 0;background:#faf5ff'>"
-                            f"<div style='font-size:14px;font-weight:700;color:#5b21b6'>"
-                            f"🔍 {_name} &nbsp;"
-                            f"<span style='font-size:13px;font-weight:400;color:#7c3aed'>{_pct}% match</span>"
-                            f"</div>"
-                            f"<div style='font-size:12px;color:#374151;margin-top:4px'>"
-                            f"<em>{_evidence}</em></div>"
-                            f"<div style='font-size:11px;color:#9ca3af;margin-top:2px'>"
-                            f"↳ CASPER is exploring this one with you</div>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        # Alternative — lighter card
-                        st.markdown(
-                            f"<div style='border-left:2px solid #d1d5db;padding:6px 12px;"
-                            f"margin-bottom:6px;border-radius:0 6px 6px 0;background:#f9fafb'>"
-                            f"<div style='font-size:13px;font-weight:600;color:#6b7280'>"
-                            f"◦ {_name} &nbsp;"
-                            f"<span style='font-size:12px;font-weight:400'>{_pct}% match</span>"
-                            f"</div>"
-                            + (f"<div style='font-size:11px;color:#9ca3af;margin-top:2px'>"
-                               f"<em>{_evidence}</em></div>" if _evidence else "")
-                            + f"</div>",
-                            unsafe_allow_html=True
-                        )
+                    _filled = min(10, _pct // 10)
+                    _bar = "█" * _filled + "░" * (10 - _filled)
+                    _style = "font-weight:600;" if _is_top else "color:#6b7280;"
+                    st.markdown(
+                        f"<div style='font-size:13px;{_style}margin-bottom:4px'>"
+                        f"{_name} &nbsp; <code>{_bar}</code> {_pct}%<br>"
+                        f"<span style='font-size:11px;font-weight:400;color:#9ca3af'>"
+                        f"{_c.get('evidence','')}</span></div>",
+                        unsafe_allow_html=True
+                    )
                 st.markdown("---")
 
             st.markdown("**What CASPER observed**")
