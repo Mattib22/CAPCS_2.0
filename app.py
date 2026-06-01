@@ -1359,9 +1359,11 @@ elif st.session_state.phase == "challenge":
                 st.markdown("")
                 for _c in _candidates:
                     _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
+                    _pct = max(0, min(100, _pct))
                     _name = _c.get("bias", "")
                     _is_top = _name.split("—")[0].strip() == bias_name_short
-                    _bar = "█" * (_pct // 10) + "░" * (10 - _pct // 10)
+                    _filled = min(10, _pct // 10)
+                    _bar = "█" * _filled + "░" * (10 - _filled)
                     _style = "font-weight:600;" if _is_top else "color:#6b7280;"
                     st.markdown(
                         f"<div style='font-size:13px;{_style}margin-bottom:4px'>"
