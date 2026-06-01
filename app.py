@@ -1577,6 +1577,43 @@ elif st.session_state.phase == "challenge":
             st.session_state.phase = "generating"
             st.rerun()
 
+        def _log_spark_ca_rounds(conf_val, accepted: bool):
+            """Append spark + counterattack rounds to rounds_log when Explore Further is pressed.
+            Without this the first spark cycle disappears from the conversation replay."""
+            rl = list(cd.get("rounds_log", []))
+            already_logged = any(r.get("round_state") == "spark" and
+                                 r.get("bias") == cd.get("bias_text", "") for r in rl)
+            if not already_logged:
+                _rn = cd.get("rounds", 0) + 1
+                rl.append({
+                    "round": _rn, "round_number": _rn,
+                    "round_state": "spark",
+                    "timestamp": datetime.now().isoformat(),
+                    "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                    "perspective": "", "question": "",
+                    "conversation_message": cd.get("conversation_message", ""),
+                    "followups": [], "answer": "",
+                    "shifted": False, "leaning": cd.get("leaning", ""),
+                    "confidence": cd.get("confidence_before", 50), "shift": 0, "confidence_shift": 0,
+                })
+                rl.append({
+                    "round": _rn, "round_number": _rn,
+                    "round_state": "counterattack" if accepted else "counterattack_rejected",
+                    "timestamp": datetime.now().isoformat(),
+                    "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
+                    "perspective": cd.get("perspective_text", ""), "question": "",
+                    "conversation_message": cd.get("counterattack_message", ""),
+                    "followups": [], "answer": f"[confidence: {conf_val}%]",
+                    "shifted": accepted, "leaning": cd.get("leaning", ""),
+                    "confidence": conf_val,
+                    "shift": conf_val - cd.get("confidence_start", 50),
+                    "confidence_shift": conf_val - cd.get("confidence_start", 50),
+                })
+                new_cd = dict(cd)
+                new_cd["rounds_log"] = rl
+                new_cd["rounds"] = cd.get("rounds", 0) + 1
+                st.session_state.current_decision = new_cd
+
         # ── Block 2: Option suggested + confidence slider ─────────────────────
         st.markdown("")
         with st.container(border=True):
@@ -1646,13 +1683,16 @@ elif st.session_state.phase == "challenge":
                     probe_q = st.session_state.get("_partial_probe_question", "")
                     if not probe_q:
                         with st.spinner(""):
-                            probe_q = get_partial_probe(
+                            _raw_probe = get_partial_probe(
                                 cd.get("perspective_text", ""),
                                 cd.get("confirmed_bias", "") or cd.get("bias_text", ""),
                                 cd.get("conversation_history", []),
                                 enriched_profile_str,
                                 above_threshold=explore_above
-                            ) or "What's coming up for you when you imagine actually going with this?"
+                            )
+                        # Only use the response if it's a complete question (ends with ?)
+                        probe_q = (_raw_probe if _raw_probe and _raw_probe.strip().endswith("?")
+                                   else "What's coming up for you when you imagine actually going with this?")
                         st.session_state["_partial_probe_question"] = probe_q
 
                 elif conf_val >= CONFIDENCE_THRESHOLD:
@@ -1670,6 +1710,7 @@ elif st.session_state.phase == "challenge":
                     with col2:
                         if st.button("Explore further", key=f"spark_ca_above_explore_{round_num}",
                                      use_container_width=True):
+                            _log_spark_ca_rounds(conf_val, accepted=True)
                             st.session_state["_ca_partial_mode"] = True
                             st.session_state["_ca_partial_conf"] = conf_val
                             st.session_state["_ca_explore_above"] = True
@@ -1689,6 +1730,7 @@ elif st.session_state.phase == "challenge":
                     with col2:
                         if st.button("Explore further", key=f"spark_ca_partial_explore_{round_num}",
                                      use_container_width=True):
+                            _log_spark_ca_rounds(conf_val, accepted=False)
                             st.session_state["_ca_partial_mode"] = True
                             st.session_state["_ca_partial_conf"] = conf_val
                             st.session_state["_ca_explore_above"] = False
