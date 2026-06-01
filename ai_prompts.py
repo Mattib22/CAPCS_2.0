@@ -8,6 +8,15 @@ import json
 import re
 
 
+BIAS_TO_DIMENSION = {
+    "Sunk Cost Fallacy": 1, "Idealization Bias": 1, "Projection Bias": 1,
+    "Overconfidence Bias": 1, "Halo Effect": 1,
+    "Anticipated Regret": 2, "Loss Aversion": 2, "Status Quo Bias": 2, "Omission Bias": 2,
+    "False Dichotomy": 3, "Overgeneralization": 3, "Constraint Fixation": 3,
+    "Availability Heuristic": 3, "Confirmation Bias": 3, "Anchoring Bias": 3,
+    "Social Proof Bias": 3,
+}
+
 CASPER_DIMENSIONS = """
 DIMENSION 1 — Distortions in what the user wants and values:
 - Sunk Cost Fallacy: persisting because of past investment, not future value
@@ -911,6 +920,23 @@ def extract_spark_fields(spark_response: str) -> dict:
             score = 5
         if bias:
             result["dim_biases"][d] = (bias, score)
+
+    # Enforce consistency: the chosen bias (BIAS_NAME) must appear in its correct
+    # dimension slot and have the highest score among the three dimensions.
+    chosen = result["bias_name"]
+    if chosen:
+        chosen_dim = BIAS_TO_DIMENSION.get(chosen, 0)
+        if chosen_dim:
+            existing = result["dim_biases"].get(chosen_dim)
+            existing_score = existing[1] if existing else 5
+            # Place chosen bias in its dimension with at least the existing score
+            result["dim_biases"][chosen_dim] = (chosen, max(existing_score, 8))
+            # Ensure chosen bias has the top score across all dimensions
+            max_other = max((s for d, (_, s) in result["dim_biases"].items()
+                             if d != chosen_dim), default=0)
+            cur_score = result["dim_biases"][chosen_dim][1]
+            if cur_score <= max_other:
+                result["dim_biases"][chosen_dim] = (chosen, max_other + 1)
 
     # Narrative = everything before the first structured field line
     first_field_m = _re.search(

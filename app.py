@@ -1374,8 +1374,8 @@ elif st.session_state.phase == "challenge":
             if not _candidates and bias_name_short:
                 _candidates = [{"bias": bias_name_short, "score": 5, "evidence": "", "dimension": 0}]
             if _candidates:
-                _top_name = _candidates[0].get("bias", bias_name_short)
-                st.markdown(f"The most likely pattern is **{_top_name}**")
+                # Always use the bias CASPER chose to explore as the header
+                st.markdown(f"The most likely pattern is **{bias_name_short}**")
                 st.markdown("")
                 # Sort by dimension number for display (D1, D2, D3 order)
                 _display_candidates = sorted(_candidates, key=lambda c: c.get("dimension", 9))
@@ -1644,6 +1644,9 @@ elif st.session_state.phase == "challenge":
                                 cd.get("conversation_history", []),
                                 enriched_profile_str,
                             )
+                        # Fallback if response is truncated (doesn't end with sentence punctuation)
+                        if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
+                            _ca_ans = "That's a fair question — what aspect of this option feels most uncertain to you?"
                         _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
                         _new_hist = list(cd.get("conversation_history", [])) + [
                             {"role": "user", "content": _ca_q.strip()},
