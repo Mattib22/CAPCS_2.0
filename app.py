@@ -1059,6 +1059,19 @@ elif st.session_state.phase == "generating":
                         "state": "spark", "bias_name": bias_name,
                         "bias_explanation": fields["bias_explanation"],
                     })
+                    # Build bias_candidates from per-dimension scores in spark response
+                    _dim_biases = fields.get("dim_biases", {})
+                    if _dim_biases:
+                        _dim_labels = {1: "Wants & Values", 2: "Fears & Protection", 3: "Assumptions"}
+                        cd["bias_candidates"] = sorted([
+                            {
+                                "bias": _b,
+                                "dimension": _d,
+                                "evidence": "",
+                                "score": _s,
+                            }
+                            for _d, (_b, _s) in _dim_biases.items()
+                        ], key=lambda x: x["score"], reverse=True)
                     # Generate counterattack immediately so spark state shows it inline
                     if bias_name:
                         full_ca = get_challenge_response(

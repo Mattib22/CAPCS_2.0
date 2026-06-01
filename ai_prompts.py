@@ -798,6 +798,12 @@ Never open with a generic statement that could apply to anyone — always anchor
 After the message, output on new lines:
 BIAS_NAME: {pre_identified_bias}
 BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
+D1_BIAS: [most likely bias from: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect]
+D1_SCORE: [confidence 1-10]
+D2_BIAS: [most likely bias from: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias]
+D2_SCORE: [confidence 1-10]
+D3_BIAS: [most likely bias from: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias]
+D3_SCORE: [confidence 1-10]
 
 FULL CONVERSATION:
 {history_text}
@@ -842,9 +848,15 @@ Never open with a direct quote or paraphrase of the user's words. The following 
 Never open with a third-person observation about their thinking as if viewed from the outside — "The certainty with which you're treating X..." is forbidden because it frames the user as an object of analysis. Speak from inside the conversation: "That pull toward X...", "What's keeping you from...", "There's a pattern here..."
 Start with your own direct observation — e.g. "That pull toward X is making Y feel like the only option" or "There's a pattern here where X keeps getting treated as fixed..."
 
-IMPORTANT — you MUST include both structured fields on new lines after the message. These are required:
+IMPORTANT — you MUST include all structured fields on new lines after the message:
 BIAS_NAME: [bias name only — max 6 words]
 BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
+D1_BIAS: [most likely bias from: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect]
+D1_SCORE: [confidence 1-10]
+D2_BIAS: [most likely bias from: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias]
+D2_SCORE: [confidence 1-10]
+D3_BIAS: [most likely bias from: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias]
+D3_SCORE: [confidence 1-10]
 
 FULL CONVERSATION:
 {history_text}
@@ -857,38 +869,41 @@ PROFILE:
 
 
 def extract_spark_fields(spark_response: str) -> dict:
-    """Parse BIAS_NAME and BIAS_EXPLANATION from get_spark_message output.
-    Regex-based: handles any markdown wrapping (bold, italic, underscores, dashes).
-    The narrative message is everything before the first structured field line."""
+    """Parse structured fields from get_spark_message output."""
     import re as _re
-    result = {"spark_message": "", "bias_name": "", "bias_explanation": ""}
+    result = {
+        "spark_message": "", "bias_name": "", "bias_explanation": "",
+        "dim_biases": {},  # {1: (bias, score), 2: ..., 3: ...}
+    }
 
-    # BIAS_NAME: single line only
-    name_m = _re.search(
-        r'[\*\_\-\s]*BIAS[\s_]?NAME[\*\_\s]*:[\*\_\s]*(.+)',
+    def _field(pattern):
+        m = _re.search(pattern, spark_response, _re.IGNORECASE)
+        return m.group(1).splitlines()[0].strip().strip("*_").strip() if m else ""
+
+    result["bias_name"]        = _field(r'BIAS[\s_]?NAME\s*:\s*(.+)')
+    result["bias_explanation"] = _field(r'BIAS[\s_]?EXPLANATION\s*:\s*(.+)')
+
+    for d in (1, 2, 3):
+        bias  = _field(rf'D{d}[\s_]?BIAS\s*:\s*(.+)')
+        score_raw = _field(rf'D{d}[\s_]?SCORE\s*:\s*(.+)')
+        try:
+            score = max(1, min(10, int(_re.search(r'\d+', score_raw).group())))
+        except Exception:
+            score = 5
+        if bias:
+            result["dim_biases"][d] = (bias, score)
+
+    # Narrative = everything before the first structured field line
+    first_field_m = _re.search(
+        r'[\*\_\-\s]*(?:BIAS[\s_]?NAME|D[123][\s_]?BIAS)\s*:',
         spark_response, _re.IGNORECASE
     )
-    # BIAS_EXPLANATION: capture to end of string (handles line-wrapped explanations)
-    exp_m = _re.search(
-        r'[\*\_\-\s]*BIAS[\s_]?EXPLANATION[\*\_\s]*:[\*\_\s]*(.+)',
-        spark_response, _re.IGNORECASE | _re.DOTALL
-    )
-
-    if name_m:
-        result["bias_name"] = name_m.group(1).splitlines()[0].strip().strip("*").strip("_").strip()
-    if exp_m:
-        result["bias_explanation"] = exp_m.group(1).strip().strip("*").strip("_").strip()
-
-    # Narrative = everything before whichever structured field comes first
     cutoff = len(spark_response)
-    for m in [name_m, exp_m]:
-        if m:
-            # Walk back to the start of that line
-            line_start = spark_response.rfind("\n", 0, m.start())
-            cutoff = min(cutoff, line_start if line_start != -1 else m.start())
+    if first_field_m:
+        line_start = spark_response.rfind("\n", 0, first_field_m.start())
+        cutoff = line_start if line_start != -1 else first_field_m.start()
 
     narrative = spark_response[:cutoff].strip()
-    # Strip any trailing separator lines (--- or ***)
     narrative = _re.sub(r'\n[-\*—]{2,}\s*$', '', narrative).strip()
     result["spark_message"] = narrative
 
