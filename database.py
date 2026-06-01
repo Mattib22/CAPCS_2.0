@@ -139,11 +139,108 @@ def delete_profile(user_key: str):
 
 
 # ── SESSION LOG FUNCTIONS ──────────────────────────────────────────────────────
+def _collapse_rounds_to_product_rounds(rounds_log: list) -> list:
+    """
+    Convert the granular in-memory rounds_log (one entry per Q/A/state) into
+    one row per product round (full bias cycle: listening → spark → counterattack).
+    Conviction rows are skipped — that data lives on the session row.
+    """
+    product_rounds = []
+    listening_buffer = []
+
+    for r in rounds_log:
+        state = r.get("round_state", "")
+
+        if state == "listening":
+            q = r.get("question", "") or r.get("conversation_message", "")
+            a = r.get("answer", "")
+            listening_buffer.append({
+                "question": q,
+                "answer": a,
+                "leaning": r.get("leaning", ""),
+            })
+
+        elif state == "spark":
+            product_rounds.append({
+                "round_number": len(product_rounds) + 1,
+                "bias": r.get("bias", ""),
+                "explanation": r.get("explanation", ""),
+                "perspective": "",
+                "accepted": False,
+                "confidence_before": r.get("confidence"),
+                "confidence_after": None,
+                "confidence_shift": 0,
+                "initial_leaning": (
+                    listening_buffer[0].get("leaning", "") if listening_buffer
+                    else r.get("leaning", "")
+                ),
+                "listening_qa": listening_buffer[:],
+            })
+            listening_buffer = []
+
+        elif state in ("counterattack", "counterattack_rejected", "counterattack_partial"):
+            if product_rounds:
+                pr = product_rounds[-1]
+                if r.get("perspective"):
+                    pr["perspective"] = r["perspective"]
+                pr["accepted"] = (state == "counterattack")
+                pr["confidence_after"] = r.get("confidence")
+                pr["confidence_shift"] = r.get("shift", 0) or r.get("confidence_shift", 0)
+
+    return product_rounds
+
+
+def _product_rounds_to_rounds_log(rows: list) -> list:
+    """
+    Reconstruct a rounds_log compatible with the rest of the app from the
+    simplified product-round rows stored in Supabase.
+    Each DB row → one synthetic spark entry + one counterattack/rejected entry
+    + one listening entry (for initial-leaning detection).
+    """
+    rounds_log = []
+    for r in rows:
+        n = r.get("round_number", 0)
+        # Synthetic listening row — only what the app actually reads from it
+        if r.get("initial_leaning"):
+            rounds_log.append({
+                "round_number": n,
+                "round_state": "listening",
+                "leaning": r.get("initial_leaning", ""),
+                "bias": "", "explanation": "", "perspective": "",
+                "shifted": False, "shift": 0,
+                "confidence": r.get("confidence_before"),
+            })
+        # Spark row
+        rounds_log.append({
+            "round_number": n,
+            "round_state": "spark",
+            "bias": r.get("bias", ""),
+            "explanation": r.get("explanation", ""),
+            "perspective": "",
+            "conversation_message": "",
+            "shifted": False, "shift": 0,
+            "confidence": r.get("confidence_before"),
+        })
+        # Counterattack row
+        ca_state = "counterattack" if r.get("accepted") else "counterattack_rejected"
+        rounds_log.append({
+            "round_number": n,
+            "round_state": ca_state,
+            "bias": r.get("bias", ""),
+            "explanation": r.get("explanation", ""),
+            "perspective": r.get("perspective", ""),
+            "shifted": bool(r.get("accepted")),
+            "shift": r.get("confidence_shift", 0),
+            "confidence_shift": r.get("confidence_shift", 0),
+            "confidence": r.get("confidence_after"),
+        })
+    return rounds_log
+
+
 def save_log(entry: dict):
     user_key = st.session_state.get("user_key", "anonymous")
     try:
         sb = get_supabase()
-        # Compute session duration in seconds
         session_duration = None
         try:
             start = datetime.fromisoformat(entry.get("timestamp", ""))
@@ -152,7 +249,6 @@ def save_log(entry: dict):
         except Exception:
             pass
 
-        # Insert session summary row (no rounds_log — stored in rounds table)
         session_row = {
             "user_key": user_key,
             "timestamp": entry.get("timestamp"),
@@ -175,46 +271,35 @@ def save_log(entry: dict):
             "undecided_outcome": entry.get("undecided_outcome", False),
         }
         session_res = sb.table("sessions").insert(session_row).execute()
-
-        # Get the new session's UUID to link rounds AND feedback
         session_id = session_res.data[0]["id"] if session_res.data else None
-        # Store session_id back in entry so the report page can use it
         entry["id"] = session_id
 
-        # Insert each round as a separate row in the rounds table
+        # One row per product round (bias cycle), not per Q/A step
         if session_id:
-            for r in entry.get("rounds_log", []):
-                round_row = {
+            product_rounds = _collapse_rounds_to_product_rounds(
+                entry.get("rounds_log", [])
+            )
+            for pr in product_rounds:
+                sb.table("rounds").insert({
                     "session_id": session_id,
                     "user_key": user_key,
-                    "round_number": r.get("round"),
-                    "round_state": r.get("round_state", ""),
-                    "timestamp": r.get("timestamp"),
-                    "bias": r.get("bias", ""),
-                    "explanation": r.get("explanation", ""),
-                    "perspective": r.get("perspective", ""),
-                    "question": r.get("question", ""),
-                    "conversation_message": r.get("conversation_message", ""),
-                    "followups": r.get("followups", []),
-                    "answer": r.get("answer", ""),
-                    "answer_depth": r.get("answer_depth", ""),
-                    "answer_emotion": r.get("answer_emotion", ""),
-                    "answer_certainty": r.get("answer_certainty", ""),
-                    "answer_key_signal": r.get("answer_key_signal", ""),
-                    "how_shifted": r.get("how_shifted", ""),
-                    "shifted": r.get("shifted", False),
-                    "leaning": r.get("leaning", ""),
-                    "confidence": r.get("confidence"),
-                    "shift": r.get("shift", 0),
-                    "confidence_shift": r.get("confidence_shift", r.get("shift", 0)),
-                }
-                sb.table("rounds").insert(round_row).execute()
+                    "round_number": pr["round_number"],
+                    "bias": pr["bias"],
+                    "explanation": pr["explanation"],
+                    "perspective": pr["perspective"],
+                    "accepted": pr["accepted"],
+                    "confidence_before": pr["confidence_before"],
+                    "confidence_after": pr["confidence_after"],
+                    "confidence_shift": pr["confidence_shift"],
+                    "initial_leaning": pr["initial_leaning"],
+                    "listening_qa": pr["listening_qa"],
+                }).execute()
 
-        # Invalidate cache so next load_log fetches fresh data
         st.session_state["_load_log_dirty"] = True
 
     except Exception as e:
         st.error(f"Could not save session: {e}")
+
 
 def load_log() -> list:
     """
@@ -222,23 +307,28 @@ def load_log() -> list:
     multiple round-trips per page render.
     """
     user_key = st.session_state.get("user_key", "anonymous")
-    # Cache for this render cycle — cleared when new data is saved
     cache_key = f"_load_log_cache_{user_key}"
     if cache_key in st.session_state and st.session_state.get("_load_log_dirty") is not True:
         return st.session_state[cache_key]
     try:
         sb = get_supabase()
-        sessions_res = sb.table("sessions").select("*").eq("user_key", user_key).order("completed_at").execute()
+        sessions_res = (
+            sb.table("sessions").select("*")
+            .eq("user_key", user_key).order("completed_at").execute()
+        )
         sessions = sessions_res.data or []
 
-        rounds_res = sb.table("rounds").select("*").eq("user_key", user_key).order("round_number").execute()
-        rounds_by_session = {}
+        rounds_res = (
+            sb.table("rounds").select("*")
+            .eq("user_key", user_key).order("round_number").execute()
+        )
+        rounds_by_session: dict = {}
         for r in (rounds_res.data or []):
-            sid = r.get("session_id")
-            rounds_by_session.setdefault(sid, []).append(r)
+            rounds_by_session.setdefault(r.get("session_id"), []).append(r)
 
         for s in sessions:
-            s["rounds_log"] = rounds_by_session.get(s.get("id"), [])
+            product_rows = rounds_by_session.get(s.get("id"), [])
+            s["rounds_log"] = _product_rounds_to_rounds_log(product_rows)
 
         st.session_state[cache_key] = sessions
         st.session_state["_load_log_dirty"] = False
