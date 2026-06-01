@@ -1268,6 +1268,9 @@ elif st.session_state.phase == "challenge":
                     second = candidates[1] if len(candidates) > 1 else None
                     gap = top["score"] - second["score"] if second else 10
 
+                    # Always store the full candidate list for uncertainty display
+                    cd["bias_candidates"] = candidates
+
                     if top["score"] >= 7 and gap >= 3:
                         # Clear winner — spark directly
                         pre_identified = top["bias"]
@@ -1285,7 +1288,6 @@ elif st.session_state.phase == "challenge":
                         else:
                             disambig_q = ""
                         cd["disambiguation_question"] = disambig_q
-                        cd["bias_candidates"] = candidates[:2]
                         next_state = "listening"
                         new_extra = 1
                 else:
@@ -1353,6 +1355,23 @@ elif st.session_state.phase == "challenge":
             if bias_name_short:
                 st.markdown(f"What is **{bias_name_short}**?")
             st.markdown(cd.get("explanation_text", ""))
+
+            # Uncertainty table — show all candidates with relative likelihood
+            _candidates = cd.get("bias_candidates", [])
+            if len(_candidates) > 1:
+                _total = sum(c.get("score", 0) for c in _candidates)
+                with st.expander("🔍 CASPER's full assessment", expanded=False):
+                    st.caption("Relative likelihood based on your responses:")
+                    for _c in _candidates:
+                        _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
+                        _name = _c.get("bias", "")
+                        _marker = "▶ " if _name.split("—")[0].strip() == bias_name_short else "　"
+                        st.markdown(
+                            f"{_marker}**{_name}** — {_pct}%  \n"
+                            f"<span style='font-size:12px;color:#6b7280'>{_c.get('evidence','')}</span>",
+                            unsafe_allow_html=True
+                        )
+
             st.markdown("")
             _current_resonance = cd.get("bias_resonance", "")
             if _current_resonance:

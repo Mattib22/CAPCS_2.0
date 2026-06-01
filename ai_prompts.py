@@ -1219,7 +1219,14 @@ def identify_candidate_biases(conversation_history: list, profile_str: str,
 
     prompt = f"""You are a diagnostic psychologist. Read the user's answers and identify which cognitive biases they specifically reveal.
 
-For each bias you identify, you MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision type — only from what the user actually said.
+SELECTION PROCESS — follow these steps in order:
+1. Read all three of the user's answers in full before forming any hypothesis.
+2. Consider ALL 15 biases in the taxonomy simultaneously — do NOT pre-filter by decision type, dimension, or familiarity.
+3. For each bias you consider, ask: what exact phrase or idea in the user's own words supports it? If you cannot cite specific evidence, discard that bias.
+4. Pick only the biases that are earned by what the user actually said — not what you would expect given the decision topic.
+5. Rank by specificity: prefer the bias that most precisely and surprisingly explains this person's reasoning over a generic one that could apply to almost anyone.
+
+For each bias you include, you MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision type alone.
 
 Return ONLY a JSON array with at most 3 entries, highest confidence first:
 [
@@ -1230,7 +1237,7 @@ Return ONLY a JSON array with at most 3 entries, highest confidence first:
 score = 1-10. Only include biases with score >= 4. If only one fits well, return just that one. If nothing clearly fits, return [].
 
 BIAS TAXONOMY — only use names exactly as listed:
-{CASPER_DIMENSIONS}
+{_shuffled_dimensions()}
 
 USER'S ANSWERS:
 {user_turns}
