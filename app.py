@@ -1648,7 +1648,7 @@ elif st.session_state.phase == "challenge":
                         cd.get("conversation_history", []),
                         enriched_profile_str,
                     )
-                if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
+                if not _ca_ans or len(_ca_ans.strip()) < 15:
                     _ca_ans = "The core of this option is about using the current situation to build toward what you actually want — whether that means gaining new skills, saving, or creating more flexibility before committing to a bigger decision."
                 _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
                 _new_hist = list(cd.get("conversation_history", [])) + [
@@ -1696,8 +1696,8 @@ elif st.session_state.phase == "challenge":
                                 enriched_profile_str,
                                 above_threshold=explore_above
                             )
-                        # Only use the response if it's a complete question (ends with ?)
-                        probe_q = (_raw_probe if _raw_probe and _raw_probe.strip().endswith("?")
+                        # Fallback only if response is empty or too short to be meaningful
+                        probe_q = (_raw_probe if _raw_probe and len(_raw_probe.strip()) >= 15
                                    else "What's coming up for you when you imagine actually going with this?")
                         st.session_state["_partial_probe_question"] = probe_q
 
