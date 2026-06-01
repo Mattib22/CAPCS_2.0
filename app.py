@@ -1383,7 +1383,8 @@ elif st.session_state.phase == "challenge":
                 st.markdown("---")
 
             if st.session_state.get("_debug_candidates") is not None:
-                st.caption(f"[debug] raw candidates: {st.session_state['_debug_candidates']}")
+                st.caption(f"[debug] candidates: {st.session_state['_debug_candidates']}")
+                st.caption(f"[debug] raw API response: {st.session_state.get('_debug_raw_diagnostic', 'n/a')}")
             st.markdown("**What CASPER observed**")
             st.markdown(conversation_msg)
             st.markdown("---")

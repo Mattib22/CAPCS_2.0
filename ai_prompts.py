@@ -1242,6 +1242,12 @@ Output ONLY this JSON array, nothing else:
 [{{"bias":"<name>","dimension":1,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":2,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":3,"evidence":"<quote>","score":<n>}}]"""
 
     result = ask_ai(prompt, 1200)
+    # Store raw result for debugging — remove once diagnostic is confirmed working
+    try:
+        import streamlit as _st
+        _st.session_state["_debug_raw_diagnostic"] = result[:500] if result else "<empty>"
+    except Exception:
+        pass
     try:
         stripped = result.strip()
         if not stripped:
