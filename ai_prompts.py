@@ -183,59 +183,64 @@ Why this works: 'settle' comes from the user's own words. Profile elements creat
 
 ---
 
-QUESTION 2 — Open the costs and stakes
+QUESTION 2 — Open what feels difficult or significant about this
 
-Read their first answer. Do NOT diagnose a pattern yet. Find the thing they said that carries the most emotional weight — something they care about, something at stake, something that feels heavy — and ask about THAT specific thing in a way that invites them to go deeper.
+Read their first answer. Do NOT diagnose a pattern yet. Find the thing they said that feels most emotionally significant — something they care about, something that weighs on them, something uncertain — and ask about THAT specific thing in a way that invites them to go deeper.
 
-The goal is to hear what this decision costs them, what they stand to lose or protect, or what matters most to them that this choice touches. The diagnostic will infer the pattern from their answer. Your job is only to give them space to reveal it.
+The goal is simply to hear more about what feels hard, heavy, or meaningful in this decision. The diagnostic will identify the pattern from their answer. Your job is only to create space for them to reveal it.
 
 The question must:
 - Come entirely from their actual words — not from a pattern template
 - Feel like a curious friend who just heard something important and wants to understand it better
-- Open territory around costs, stakes, or what matters — without naming or implying any specific mechanism
+- Be open enough that any of the four D2 patterns could surface: avoiding a future feeling, fear of losing something, pull of the familiar, or preference for inaction
 
 The question must NOT:
-- Present a binary ("is it X or Y?") — binary frames pre-select the answer and reveal the hypothesis
-- Mention or imply a future feeling they might be avoiding — that signals Anticipated Regret before they've said it
-- Ask whether two options are "fair" or "equivalent" — that signals Loss Aversion
-- Ask whether the current situation "really" serves them — that signals Status Quo Bias
-- Ask whether inaction is also a choice — that signals Omission Bias
+- Present a binary ("is it X or Y?") — binary frames pre-select the answer
+- Use words like "cost", "lose", "give up", "leave behind" — these pre-frame the answer as loss territory and signal Loss Aversion
+- Mention or imply a future feeling they might be avoiding — signals Anticipated Regret
+- Ask whether the current situation is really serving them — signals Status Quo Bias
+- Ask whether inaction is also a choice — signals Omission Bias
 
-Ask: what's genuinely at stake for them in this specific situation. What would they be leaving behind. What feels hardest. Let their answer introduce the frame — don't introduce it for them.
+Just ask about what feels most significant or difficult about this specific situation for this person. Let their words tell you what kind of weight it is.
 
-✗ BAD: "Is this driven by what you want, or by wanting to avoid looking back and regretting it?" — reveals Anticipated Regret
-✗ BAD: "What would you be giving up, and does it feel bigger than what you'd gain?" — reveals Loss Aversion
-✓ GOOD: "What matters most to you right now that this decision directly affects?"
-✓ GOOD: "What would you be walking away from if you chose [option they mentioned]?"
+✗ BAD: "Is this driven by what you want, or by wanting to avoid regretting it later?" — reveals Anticipated Regret
+✗ BAD: "What would you be walking away from?" — pre-frames as loss, reveals Loss Aversion
+✗ BAD: "What matters most to you right now?" — "right now" implies present-state anchoring
+✓ GOOD: "What feels hardest about this choice for you personally?"
+✓ GOOD: "What's weighing on you most about this decision?"
 
 ---
 
-QUESTION 3 — Examine something they took for granted
+QUESTION 3 — Invite them to look at their own thinking
 
-Read their first two answers. Find ONE specific thing they stated as if it were a fact — something they said with certainty or treated as a given — that is worth examining. Ask about THAT specific thing directly, in a way that invites them to reflect on how certain they actually are.
+Read their first two answers. Find ONE specific thing in what they said that is doing heavy lifting in their reasoning — a belief, a comparison they're making, an experience they're drawing on, an expectation about what others think, or something they've implied without examining. Ask a genuinely curious question about THAT specific thing.
 
-The question must come entirely from their words. It should sound like someone who listened closely and noticed a specific claim they made — not someone running a diagnostic test.
+The question must come entirely from their words — not from a pattern category. It should sound like someone who listened carefully and is simply curious about something specific they said, not like someone probing for a flaw in their thinking.
 
-Ask about:
-- How certain they are about something specific they implied
-- What experience or evidence is behind something they stated as settled
-- What would need to be different for their situation to look different
-- What the strongest case for the other direction is (only if they've only cited evidence for one side)
-- Where a specific belief or comparison they mentioned comes from
+What to look for in their answers (any of these could be the thing worth asking about):
+- A belief or conclusion they stated without explaining where it comes from
+- A comparison or reference point they're anchoring everything to
+- A past experience they seem to be treating as a universal guide
+- An expectation about what others do, expect, or think
+- An option or path they've dismissed without explaining why
+- Something they said with certainty that might not be as settled as it sounds
 
 The question must NOT use any pattern's signature framing:
-- NOT "are those really the only options" — signals False Dichotomy
-- NOT "is that actually fixed / changeable" — signals Constraint Fixation
-- NOT "how typical is that" — signals Availability Heuristic
-- NOT "are you only looking at evidence that confirms what you already think" — signals Confirmation Bias
-- NOT "if others couldn't see this choice, what would you do" — signals Social Proof Bias
+- NOT anything about whether options are "really" limited — signals False Dichotomy
+- NOT anything about whether a limit is fixed or changeable — signals Constraint Fixation
+- NOT "how certain are you" — signals Constraint Fixation or Overconfidence
+- NOT anything about whether evidence is balanced — signals Confirmation Bias
+- NOT anything about what others think or do — signals Social Proof
+- NOT anything about how typical or common something is — signals Availability Heuristic
+- NOT anything about what they'd do without reference points — signals Anchoring
 
-Their answer will reveal which assumption is doing the work. That's what the diagnostic reads. Your question just creates space for that assumption to surface on its own.
+Just ask a direct, warm, curious question about the specific thing they said. Their answer will reveal what assumption is driving it.
 
-✗ BAD: "Under what circumstances would [constraint] not be a problem?" — signals Constraint Fixation
 ✗ BAD: "Is going back to Europe really your only alternative?" — signals False Dichotomy
-✓ GOOD: "How certain are you about [specific thing they said as if it's settled]?"
-✓ GOOD: "What's the strongest case for the direction you're not currently leaning toward?"
+✗ BAD: "How certain are you that the relationship can't change?" — signals Constraint Fixation
+✗ BAD: "How typical is that experience?" — signals Availability Heuristic
+✓ GOOD: "What makes you say that [specific thing they stated]?"
+✓ GOOD: "Where does [specific belief or comparison they mentioned] come from for you?"
 
 ---
 
