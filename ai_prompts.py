@@ -155,23 +155,40 @@ You are trying to open up territory in Dimension 2. Ask from genuine curiosity a
 
 ---
 
-QUESTION 3 — Dimension 3: surface the assumption being treated as a fixed fact
+QUESTION 3 — Dimension 3: surface the hidden assumption
 
-Read their second answer carefully. Find the belief or constraint embedded in what they said — something they are treating as fixed and unchangeable. The assumption is usually a hidden either/or: "X is the only way to Y" or "if not X then necessarily Z".
+Read their first two answers carefully. Identify which Dimension 3 assumption pattern is most present in what they said. Dimension 3 has seven distinct patterns — pick the ONE that best fits this specific person's reasoning, then ask a question that exposes the assumption underneath it without naming the bias.
 
-Ask a question that makes that hidden assumption visible. The question must challenge whether the constraint is actually real.
+The seven patterns and what to listen for:
 
-The bias taxonomy reference for this question:
-{CASPER_DIMENSIONS}
+- False Dichotomy: they frame the choice as having only two possibilities when more exist
+  → "Are those really the only two options here, or is something making it feel more binary than it is?"
 
-You are trying to open up territory in Dimension 3.
-✗ BAD (reframe/problem-solve): "What might still make the experience worthwhile if it doesn't go as hoped?"
-✗ BAD (paraphrase echo): "You're feeling that staying home means isolation."
-✓ GOOD (surfaces assumption): "Is meeting people at the pub the only way you could feel less lonely today?"
-✓ GOOD (surfaces assumption): "Is being at home the only alternative to going out — or is there something in between?"
+- Overgeneralization: they treat one past experience as proof of what will always happen
+  → "Is that one experience telling you something universally true, or could this situation be genuinely different?"
+
+- Constraint Fixation: they state a limit as permanent when it may be changeable
+  → "Is that actually a fixed ceiling, or is it something that could shift if you approached it differently?"
+
+- Availability Heuristic: a vivid or recent example is driving their probability estimate
+  → "Is that the most representative example of what normally happens, or is it standing out because it's recent or striking?"
+
+- Confirmation Bias: they cite evidence selectively — only what confirms the path they favour
+  → "What would it take to change your mind about this — have you genuinely looked for reasons the other direction could work?"
+
+- Anchoring Bias: they keep returning to one reference point (a number, a comparison, a past moment) as if it defines the whole picture
+  → "Is [what they anchored on] actually the right thing to be measuring this against?"
+
+- Social Proof Bias: what others are doing or expecting is shaping the choice more than personal values
+  → "Is this what you want, or what feels expected given what the people around you are doing?"
+
+IMPORTANT: Do NOT default to Constraint Fixation just because a constraint appears in the answer. Every decision involves some constraints — that alone is not evidence of the bias. Only use Constraint Fixation if the person is treating a clearly changeable limit as if it were permanent and non-negotiable.
 
 The question should be genuinely curious, not confrontational. Make them think, not defend themselves.
 Jump straight to the question — do not open with any paraphrase, summary, or echo of what they said.
+✗ BAD (reframe/problem-solve): "What might still make the experience worthwhile if it doesn't go as hoped?"
+✗ BAD (paraphrase echo): "You're feeling that staying home means isolation."
+✗ BAD (always constraint): "Is that the only way you could achieve this?"
 
 ---
 
