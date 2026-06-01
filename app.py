@@ -1351,24 +1351,30 @@ elif st.session_state.phase == "challenge":
         # ── Block 1: Possible pattern identified ─────────────────────────────
         with st.container(border=True):
 
-            # ── Candidate biases with likelihood % ───────────────────────────
+            # ── Candidate biases — one per dimension with likelihood % ────────
+            _dim_labels = {1: "Wants & Values", 2: "Fears & Protection", 3: "Assumptions"}
             _candidates = cd.get("bias_candidates", [])
             if not _candidates and bias_name_short:
-                _candidates = [{"bias": bias_name_short, "score": 5, "evidence": ""}]
+                _candidates = [{"bias": bias_name_short, "score": 5, "evidence": "", "dimension": 0}]
             if _candidates:
                 _top_name = _candidates[0].get("bias", bias_name_short)
                 st.markdown(f"The most likely pattern is **{_top_name}**")
                 st.markdown("")
-                for _c in _candidates:
+                # Sort by dimension number for display (D1, D2, D3 order)
+                _display_candidates = sorted(_candidates, key=lambda c: c.get("dimension", 9))
+                for _c in _display_candidates:
                     _pct = max(0, min(100, int(_c.get("score", 0)) * 10))
                     _name = _c.get("bias", "")
+                    _dim = _c.get("dimension", 0)
+                    _dim_label = _dim_labels.get(_dim, "")
                     _is_top = _name.split("—")[0].strip() == bias_name_short
                     _filled = min(10, _pct // 10)
                     _bar = "█" * _filled + "░" * (10 - _filled)
                     _style = "font-weight:600;" if _is_top else "color:#6b7280;"
+                    _dim_prefix = f"<span style='font-size:10px;color:#9ca3af;margin-right:6px'>D{_dim} {_dim_label}</span>" if _dim else ""
                     st.markdown(
                         f"<div style='font-size:13px;{_style}margin-bottom:4px'>"
-                        f"{_name} &nbsp; <code>{_bar}</code> {_pct}%<br>"
+                        f"{_dim_prefix}{_name} &nbsp; <code>{_bar}</code> {_pct}%<br>"
                         f"<span style='font-size:11px;font-weight:400;color:#9ca3af'>"
                         f"{_c.get('evidence','')}</span></div>",
                         unsafe_allow_html=True

@@ -794,7 +794,7 @@ Start with your own direct observation — e.g. "That pull toward X is making Y 
 
 After the message, output on new lines:
 BIAS_NAME: {pre_identified_bias}
-BIAS_EXPLANATION: [one plain English sentence — what this bias is]
+BIAS_EXPLANATION: [one sentence that explains what this bias looks like in THIS person's specific situation — grounded in what they said, not a generic definition. E.g. not "Loss Aversion: fear of loss outweighs gain" but "For you, this could mean the fear of giving up your current freedom is weighing more heavily than what settling might actually bring."]
 
 FULL CONVERSATION:
 {history_text}
@@ -841,7 +841,7 @@ Start with your own direct observation — e.g. "That pull toward X is making Y 
 
 IMPORTANT — you MUST include both structured fields on new lines after the message. These are required:
 BIAS_NAME: [bias name only — max 6 words]
-BIAS_EXPLANATION: [one plain English sentence — what this bias is]
+BIAS_EXPLANATION: [one sentence that explains what this bias looks like in THIS person's specific situation — grounded in what they said, not a generic definition. E.g. not "Loss Aversion: fear of loss outweighs gain" but "For you, this could mean the fear of giving up your current freedom is weighing more heavily than what settling might actually bring."]
 
 FULL CONVERSATION:
 {history_text}
@@ -1225,35 +1225,29 @@ def identify_candidate_biases(conversation_history: list, profile_str: str,
     if not user_turns.strip():
         return []
 
-    prompt = f"""You are a diagnostic psychologist. Read the user's answers and identify which cognitive biases they specifically reveal.
+    prompt = f"""You are a diagnostic psychologist. Read the user's answers and score one bias per dimension.
 
-SELECTION PROCESS — follow these steps in order:
-1. Read all three of the user's answers in full before forming any hypothesis.
-2. Consider ALL 15 biases in the taxonomy simultaneously — do NOT pre-filter by decision type, dimension, or familiarity.
-3. For each bias you consider, ask: what exact phrase or idea in the user's own words supports it? If you cannot cite specific evidence, discard that bias.
-4. Pick only the biases that are earned by what the user actually said — not what you would expect given the decision topic.
-5. Rank by specificity: prefer the bias that most precisely and surprisingly explains this person's reasoning over a generic one that could apply to almost anyone.
+For each of the three dimensions below, identify the single bias that best fits what the user actually said, and score your confidence in it.
 
-For each bias you include, you MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision type alone.
+SCORING (absolute confidence — not relative):
+  8-10 = strong, clear evidence in the user's exact words
+  5-7  = moderate evidence — pattern is present but not the main story
+  1-4  = weak or speculative — some signal but not convincing
 
-Return ONLY a JSON array with the top 3 most plausible biases, highest confidence first:
-[
-  {{"bias": "Exact Bias Name From Taxonomy", "evidence": "specific phrase from user", "score": 8}},
-  {{"bias": "Second Bias Name", "evidence": "what specifically points to it", "score": 5}},
-  {{"bias": "Third Bias Name", "evidence": "what weakly points to it", "score": 3}}
-]
+Rules:
+- You MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision topic alone.
+- If a dimension shows no signal at all, still pick the most plausible bias from it and give it a score of 1-2.
+- Use only bias names exactly as listed in the taxonomy.
 
-score = 1-10 (absolute confidence, not relative ranking):
-  8-10 = strong clear evidence in the user's exact words
-  5-7  = moderate evidence — pattern is present but not dominant
-  3-4  = weak but plausible — some signal, worth showing as an alternative
-
-Always return the top 3 biases that have any evidence, even if their score is low.
-Only return fewer than 3 if genuinely fewer than 3 biases have any evidence at all.
-If nothing fits at all, return [].
-
-BIAS TAXONOMY — only use names exactly as listed:
+BIAS TAXONOMY:
 {_shuffled_dimensions()}
+
+Return EXACTLY 3 entries — one per dimension — as a JSON array:
+[
+  {{"bias": "Best bias from Dimension 1", "dimension": 1, "evidence": "exact phrase from user", "score": 7}},
+  {{"bias": "Best bias from Dimension 2", "dimension": 2, "evidence": "exact phrase from user", "score": 4}},
+  {{"bias": "Best bias from Dimension 3", "dimension": 3, "evidence": "exact phrase from user", "score": 9}}
+]
 
 USER'S ANSWERS:
 {user_turns}
@@ -1262,7 +1256,7 @@ CONTEXT: {context}
 PROFILE:
 {profile_str}
 
-IMPORTANT: Output ONLY the raw JSON array below. No preamble, no steps, no reasoning, no explanation before or after it."""
+IMPORTANT: Output ONLY the raw JSON array. No preamble, no reasoning, no explanation."""
 
     result = ask_ai(prompt, 600)
     try:
@@ -1290,10 +1284,11 @@ IMPORTANT: Output ONLY the raw JSON array below. No preamble, no steps, no reaso
         valid = []
         for item in parsed:
             if isinstance(item, dict) and "bias" in item:
-                score = int(item.get("score", 0))
-                if score >= 3 and item["bias"].strip():
+                score = max(1, min(10, int(item.get("score", 1))))
+                if item["bias"].strip():
                     valid.append({
                         "bias": item["bias"].strip(),
+                        "dimension": int(item.get("dimension", 0)),
                         "evidence": item.get("evidence", "").strip(),
                         "score": score,
                     })
