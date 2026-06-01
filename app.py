@@ -1358,9 +1358,9 @@ elif st.session_state.phase == "challenge":
 
             # Uncertainty table — show all candidates with relative likelihood
             _candidates = cd.get("bias_candidates", [])
-            if len(_candidates) > 1:
+            if _candidates:
                 _total = sum(c.get("score", 0) for c in _candidates)
-                with st.expander("🔍 CASPER's full assessment", expanded=False):
+                with st.expander("🔍 CASPER's full assessment", expanded=True):
                     st.caption("Relative likelihood based on your responses:")
                     for _c in _candidates:
                         _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
