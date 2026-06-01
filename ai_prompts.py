@@ -1247,7 +1247,7 @@ PROFILE:
 {profile_str}
 
 Output only your response."""
-    return ask_ai(prompt, 800) or "The option is about using renting's lower financial commitment to create space for income growth — whether through upskilling, a role change, or building savings over time."
+    return ask_ai(prompt, 2000) or "The option is about using renting's lower financial commitment to create space for income growth — whether through upskilling, a role change, or building savings over time."
 
 
 def get_partial_probe(option_proposed: str, confirmed_bias: str,
