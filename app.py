@@ -1349,28 +1349,35 @@ elif st.session_state.phase == "challenge":
 
         # ── Block 1: Possible pattern identified ─────────────────────────────
         with st.container(border=True):
-            st.markdown("**Possible pattern identified**")
+
+            # Likelihood table at the top — before the spark message
+            _candidates = cd.get("bias_candidates", [])
+            if _candidates:
+                _total = sum(c.get("score", 0) for c in _candidates)
+                _top_name = _candidates[0].get("bias", bias_name_short)
+                st.markdown(f"The most likely pattern is **{_top_name}**")
+                st.markdown("")
+                for _c in _candidates:
+                    _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
+                    _name = _c.get("bias", "")
+                    _is_top = _name.split("—")[0].strip() == bias_name_short
+                    _bar = "█" * (_pct // 10) + "░" * (10 - _pct // 10)
+                    _style = "font-weight:600;" if _is_top else "color:#6b7280;"
+                    st.markdown(
+                        f"<div style='font-size:13px;{_style}margin-bottom:4px'>"
+                        f"{_name} &nbsp; <code>{_bar}</code> {_pct}%<br>"
+                        f"<span style='font-size:11px;font-weight:400;color:#9ca3af'>"
+                        f"{_c.get('evidence','')}</span></div>",
+                        unsafe_allow_html=True
+                    )
+                st.markdown("---")
+
+            st.markdown("**What CASPER observed**")
             st.markdown(conversation_msg)
             st.markdown("---")
             if bias_name_short:
                 st.markdown(f"What is **{bias_name_short}**?")
             st.markdown(cd.get("explanation_text", ""))
-
-            # Uncertainty table — show all candidates with relative likelihood
-            _candidates = cd.get("bias_candidates", [])
-            if _candidates:
-                _total = sum(c.get("score", 0) for c in _candidates)
-                with st.expander("🔍 CASPER's full assessment", expanded=True):
-                    st.caption("Relative likelihood based on your responses:")
-                    for _c in _candidates:
-                        _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
-                        _name = _c.get("bias", "")
-                        _marker = "▶ " if _name.split("—")[0].strip() == bias_name_short else "　"
-                        st.markdown(
-                            f"{_marker}**{_name}** — {_pct}%  \n"
-                            f"<span style='font-size:12px;color:#6b7280'>{_c.get('evidence','')}</span>",
-                            unsafe_allow_html=True
-                        )
 
             st.markdown("")
             _current_resonance = cd.get("bias_resonance", "")
