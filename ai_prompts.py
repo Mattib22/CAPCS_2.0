@@ -33,6 +33,25 @@ DIMENSION 3 — Distortions in what the user assumes:
 """
 
 
+def _shuffled_dim_bias_lists() -> dict:
+    """Return {1: [bias, ...], 2: [...], 3: [...]} with each list shuffled."""
+    dim_biases: dict = {}
+    current_dim = 0
+    for line in CASPER_DIMENSIONS.strip().splitlines():
+        if line.startswith("DIMENSION"):
+            try:
+                current_dim = int(line.split()[1])
+            except (IndexError, ValueError):
+                pass
+            dim_biases[current_dim] = []
+        elif line.startswith("-") and current_dim:
+            name = line[1:].split(":")[0].strip()
+            dim_biases[current_dim].append(name)
+    for lst in dim_biases.values():
+        random.shuffle(lst)
+    return dim_biases
+
+
 def _shuffled_dimensions() -> str:
     """Return CASPER_DIMENSIONS with dimensions and biases in randomised order.
     Prevents the model from anchoring on the first-listed biases every call."""
@@ -798,11 +817,11 @@ Never open with a generic statement that could apply to anyone — always anchor
 After the message, output on new lines:
 BIAS_NAME: {pre_identified_bias}
 BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
-D1_BIAS: [most likely bias from: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect]
+D1_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(1, []))}]
 D1_SCORE: [confidence 1-10]
-D2_BIAS: [most likely bias from: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias]
+D2_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(2, []))}]
 D2_SCORE: [confidence 1-10]
-D3_BIAS: [most likely bias from: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias]
+D3_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(3, []))}]
 D3_SCORE: [confidence 1-10]
 
 FULL CONVERSATION:
@@ -851,11 +870,11 @@ Start with your own direct observation — e.g. "That pull toward X is making Y 
 IMPORTANT — you MUST include all structured fields on new lines after the message:
 BIAS_NAME: [bias name only — max 6 words]
 BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
-D1_BIAS: [most likely bias from: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect]
+D1_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(1, []))}]
 D1_SCORE: [confidence 1-10]
-D2_BIAS: [most likely bias from: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias]
+D2_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(2, []))}]
 D2_SCORE: [confidence 1-10]
-D3_BIAS: [most likely bias from: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias]
+D3_BIAS: [most likely bias from: {", ".join(_shuffled_dim_bias_lists().get(3, []))}]
 D3_SCORE: [confidence 1-10]
 
 FULL CONVERSATION:
