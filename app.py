@@ -1253,6 +1253,7 @@ elif st.session_state.phase == "challenge":
                         )
                     if final_cands:
                         pre_identified = final_cands[0]["bias"]
+                        cd["bias_candidates"] = final_cands
                     next_state = "spark"
                 else:
                     next_state = "listening"
@@ -1351,7 +1352,10 @@ elif st.session_state.phase == "challenge":
         with st.container(border=True):
 
             # Likelihood table at the top — before the spark message
+            # Fall back to a single synthetic entry if diagnostic had no scored candidates
             _candidates = cd.get("bias_candidates", [])
+            if not _candidates and bias_name_short:
+                _candidates = [{"bias": bias_name_short, "score": 1, "evidence": ""}]
             if _candidates:
                 _total = sum(c.get("score", 0) for c in _candidates)
                 _top_name = _candidates[0].get("bias", bias_name_short)
