@@ -1249,7 +1249,8 @@ elif st.session_state.phase == "challenge":
                 if new_extra == 0:
                     with st.spinner(""):
                         final_cands = identify_candidate_biases(
-                            conv_hist, enriched_profile_str, context
+                            conv_hist, enriched_profile_str, context,
+                            rejected_biases=cd.get("rejected_biases", [])
                         )
                     if final_cands:
                         pre_identified = final_cands[0]["bias"]
@@ -1262,7 +1263,8 @@ elif st.session_state.phase == "challenge":
                 # All three answers in — run the diagnostic
                 with st.spinner(""):
                     candidates = identify_candidate_biases(
-                        conv_hist, enriched_profile_str, context
+                        conv_hist, enriched_profile_str, context,
+                        rejected_biases=cd.get("rejected_biases", [])
                     )
                 st.session_state["_debug_candidates"] = candidates
                 if candidates:
@@ -1382,9 +1384,14 @@ elif st.session_state.phase == "challenge":
                     )
                 st.markdown("---")
 
-            if st.session_state.get("_debug_candidates") is not None:
-                st.caption(f"[debug] candidates: {st.session_state['_debug_candidates']}")
-                st.caption(f"[debug] raw API response: {st.session_state.get('_debug_raw_diagnostic', 'n/a')}")
+            _dbg_raw = st.session_state.get("_debug_raw_diagnostic", "")
+            _dbg_err = st.session_state.get("_ask_ai_last_error", "")
+            if _dbg_raw or _dbg_err:
+                st.warning(
+                    f"**[DEBUG] raw diagnostic:** {_dbg_raw or 'empty'}  \n"
+                    f"**[DEBUG] api error:** {_dbg_err or 'none'}  \n"
+                    f"**[DEBUG] candidates:** {st.session_state.get('_debug_candidates')}"
+                )
             st.markdown("**What CASPER observed**")
             st.markdown(conversation_msg)
             st.markdown("---")
@@ -1497,6 +1504,8 @@ elif st.session_state.phase == "challenge":
             rejected_biases = list(cd.get("rejected_biases", []))
             if perspective and perspective not in rejected_opts:
                 rejected_opts.append(perspective)
+            if bias_tried and bias_tried not in rejected_biases:
+                rejected_biases.append(bias_tried)
             conv_hist_r = list(cd.get("conversation_history", []))
             conv_hist_r.append({"role": "user", "content": f"[confidence: {conf_val}% — option rejected]"})
             new_round_r = cd.get("rounds", 0) + 1

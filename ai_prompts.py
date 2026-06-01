@@ -65,19 +65,17 @@ def _get_api_key():
         return os.getenv("GEMINI_API_KEY", "")
 
 
-def ask_ai(prompt, max_tokens=1200):
+def ask_ai(prompt, max_tokens=1200, json_mode=False):
     try:
         genai.configure(api_key=_get_api_key())
+        gen_cfg = {"temperature": 0.8, "max_output_tokens": max_tokens}
+        if json_mode:
+            gen_cfg["response_mime_type"] = "application/json"
         model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.8, "max_output_tokens": max_tokens}
-        )
-        # response.text raises ValueError if the response was blocked or empty
+        response = model.generate_content(prompt, generation_config=gen_cfg)
         try:
             text = response.text.strip()
         except ValueError:
-            # Safety filter triggered or empty response — return safe fallback
             return ""
         text = text.lstrip("*").strip()
         for prefix in ["BIAS:","PERSPECTIVE:","EXPLANATION:","QUESTION:",
@@ -85,7 +83,13 @@ def ask_ai(prompt, max_tokens=1200):
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()
         return text
-    except Exception:
+    except Exception as e:
+        # Store last error for debugging
+        try:
+            import streamlit as _st
+            _st.session_state["_ask_ai_last_error"] = str(e)[:200]
+        except Exception:
+            pass
         return ""
 
 
@@ -1207,69 +1211,95 @@ Output only the question."""
 
 
 def identify_candidate_biases(conversation_history: list, profile_str: str,
-                               context: str) -> list:
+                               context: str,
+                               rejected_biases: list = None) -> list:
     """
     Diagnostic step after listening questions.
-    Returns up to 3 candidate biases sorted by score, each backed by evidence
-    from what the user actually said. Only returns biases with score >= 4.
-    Returns [] if no clear signal.
+    Returns up to 3 candidate biases (one per dimension) sorted by score.
+    rejected_biases: biases already tried this session — excluded from results.
     """
     import json as _json, re as _re
 
-    user_turns = "\n".join([
-        f"USER: {m['content']}"
-        for m in conversation_history
-        if m.get("role") == "user"
-    ])
-    if not user_turns.strip():
+    if rejected_biases is None:
+        rejected_biases = []
+
+    # Split answers into earlier rounds vs most recent to give recency weight
+    all_user_msgs = [m for m in conversation_history if m.get("role") == "user"
+                     and not m.get("content", "").startswith("[")]
+    if not all_user_msgs:
         return []
 
-    prompt = f"""Score one cognitive bias per dimension based on what the user said.
+    recent_cutoff = max(1, len(all_user_msgs) - 2)
+    earlier_turns = "\n".join(f"USER (earlier): {m['content']}"
+                               for m in all_user_msgs[:recent_cutoff])
+    recent_turns  = "\n".join(f"USER (most recent): {m['content']}"
+                               for m in all_user_msgs[recent_cutoff:])
 
-USER ANSWERS:
-{user_turns}
+    rejected_note = (f"\nDo NOT return any of these — already tried this session: "
+                     f"{', '.join(rejected_biases)}\n") if rejected_biases else ""
+
+    prompt = f"""Score one cognitive bias per dimension based on what the user said.
+Give more weight to the most recent answers — they reflect where the person is NOW.{rejected_note}
+
+EARLIER ANSWERS:
+{earlier_turns}
+
+MOST RECENT ANSWERS (weight these more heavily):
+{recent_turns}
 
 CONTEXT: {context}
 
-DIMENSION 1 BIASES: Sunk Cost Fallacy | Idealization Bias | Projection Bias | Overconfidence Bias | Halo Effect
-DIMENSION 2 BIASES: Anticipated Regret | Loss Aversion | Status Quo Bias | Omission Bias
-DIMENSION 3 BIASES: False Dichotomy | Overgeneralization | Constraint Fixation | Availability Heuristic | Confirmation Bias | Anchoring Bias | Social Proof Bias
+DIMENSION 1 BIASES: Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect
+DIMENSION 2 BIASES: Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias
+DIMENSION 3 BIASES: False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias
 
-For each dimension pick the best-fitting bias, score your confidence 1-10 (10=very strong, 1=weak/speculative), and quote the user's exact words as evidence.
-If a dimension shows no signal, still pick the most plausible bias and score it 1-2.
+For each dimension pick the best-fitting bias, score confidence 1-10 (10=very strong evidence, 1=weak/speculative), and quote the user's exact words.
+If a dimension has no clear signal, still pick the most plausible bias and score it 1-2.
 
-Output exactly 3 lines, nothing else, in this format:
-D1: <bias name> | <score> | <exact quote from user>
-D2: <bias name> | <score> | <exact quote from user>
-D3: <bias name> | <score> | <exact quote from user>"""
+Return a JSON array with exactly 3 objects:
+[
+  {{"bias": "bias name from D1", "dimension": 1, "evidence": "exact user quote", "score": 7}},
+  {{"bias": "bias name from D2", "dimension": 2, "evidence": "exact user quote", "score": 4}},
+  {{"bias": "bias name from D3", "dimension": 3, "evidence": "exact user quote", "score": 9}}
+]"""
 
-    result = ask_ai(prompt, 400)
+    result = ask_ai(prompt, 600, json_mode=True)
     # Store raw result for debugging
     try:
         import streamlit as _st
-        _st.session_state["_debug_raw_diagnostic"] = result[:300] if result else "<empty>"
+        _st.session_state["_debug_raw_diagnostic"] = result[:400] if result else "<empty>"
+        _st.session_state["_debug_candidates"] = None  # reset, will be set after parse
     except Exception:
         pass
     try:
+        if not result or not result.strip():
+            return []
+        stripped = result.strip()
+        if stripped.startswith("```"):
+            stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
+        parsed = _json.loads(stripped)
+        if not isinstance(parsed, list):
+            return []
         valid = []
-        for line in result.strip().splitlines():
-            line = line.strip()
-            m = _re.match(r'D([123])\s*:\s*(.+?)\s*\|\s*(\d+)\s*\|\s*(.+)', line)
-            if m:
-                dim = int(m.group(1))
-                bias = m.group(2).strip()
-                score = max(1, min(10, int(m.group(3))))
-                evidence = m.group(4).strip()
-                if bias:
+        for item in parsed:
+            if isinstance(item, dict) and item.get("bias", "").strip():
+                score = max(1, min(10, int(item.get("score", 1))))
+                dim = int(item.get("dimension", 0))
+                if dim in (1, 2, 3):
                     valid.append({
-                        "bias": bias,
+                        "bias": item["bias"].strip(),
                         "dimension": dim,
-                        "evidence": evidence,
+                        "evidence": item.get("evidence", "").strip(),
                         "score": score,
                     })
         valid.sort(key=lambda x: x["score"], reverse=True)
         return valid[:3]
-    except Exception:
+    except Exception as e:
+        try:
+            import streamlit as _st
+            _st.session_state["_debug_raw_diagnostic"] += f" | parse_err: {e}"
+        except Exception:
+            pass
         return []
 
 
