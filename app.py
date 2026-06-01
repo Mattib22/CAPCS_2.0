@@ -1646,7 +1646,7 @@ elif st.session_state.phase == "challenge":
                             )
                         # Fallback if response is truncated (doesn't end with sentence punctuation)
                         if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
-                            _ca_ans = "That's a fair question — what aspect of this option feels most uncertain to you?"
+                            _ca_ans = "That's worth exploring. What would a first concrete step toward this option actually look like for you?"
                         _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
                         _new_hist = list(cd.get("conversation_history", [])) + [
                             {"role": "user", "content": _ca_q.strip()},

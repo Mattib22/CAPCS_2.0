@@ -1233,7 +1233,7 @@ PROFILE:
 {profile_str}
 
 Output only your response."""
-    return ask_ai(prompt, 300) or "What specifically feels uncertain about this option for you?"
+    return ask_ai(prompt, 800) or "What specifically feels uncertain about this option for you?"
 
 
 def get_partial_probe(option_proposed: str, confirmed_bias: str,
