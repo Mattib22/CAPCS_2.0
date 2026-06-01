@@ -2089,7 +2089,21 @@ elif st.session_state.phase == "report":
              and r.get("answer","") and not r.get("answer","").startswith("[")),
             ""
         )
+        # Retrieve or regenerate personalised suggestions
         suggestions = st.session_state.get("_conviction_suggestions", "")
+        if not suggestions and last.get("final_choice") and what_shifted:
+            _obs = st.session_state.get("observed_profile", {})
+            _bc  = load_bias_corrections(st.session_state.get("user_key",""))
+            _pstr = format_profile(profile, _obs, _bc)
+            with st.spinner(""):
+                suggestions = get_personalised_suggestions(
+                    last.get("final_choice",""),
+                    biases_found[0] if biases_found else "",
+                    _pstr,
+                    what_shifted,
+                )
+            st.session_state["_conviction_suggestions"] = suggestions
+
         bias_cycles = len(biases_found) or last.get("rounds_completed", 1)
         st.markdown(f"**Rounds:** {bias_cycles} bias {'cycle' if bias_cycles == 1 else 'cycles'} explored")
 
@@ -2101,13 +2115,13 @@ elif st.session_state.phase == "report":
         if options_proposed:
             opt_str = ", ".join(f'"{o}"' for o in options_proposed if o)
             sections.append(f"💡 <b>What CASPER proposed</b><br>{opt_str}.")
-        if what_shifted:
-            sections.append(f"🔄 <b>What shifted for you</b><br>{what_shifted}")
         final = last.get('final_choice','—')
         conf = last.get('confidence_final', 0)
         sections.append(f"📍 <b>Where you landed</b><br><b>{final}</b> with <b>{conf}% clarity</b>.")
+        if what_shifted:
+            sections.append(f"🔄 <b>What shifted for you</b><br>{what_shifted}")
         if suggestions:
-            sections.append(f"✨ <b>Next steps CASPER suggested</b><br>{suggestions}")
+            sections.append(f"✨ <b>Next steps</b><br>{suggestions}")
 
         if sections:
             st.markdown(
