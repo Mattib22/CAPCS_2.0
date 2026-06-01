@@ -1641,7 +1641,8 @@ elif st.session_state.phase == "challenge":
             if probe_q:
                 with st.chat_message("assistant", avatar="🧑‍🏫"):
                     st.markdown(probe_q)
-                scroll_to_chat_bottom()
+                # No scroll_to_chat_bottom here — it would scroll the probe
+                # question behind the fixed chat_input at the bottom of the viewport
             partial_reply = st.chat_input(
                 "What's coming up for you?",
                 key=f"spark_ca_partial_{round_num}"
@@ -1661,7 +1662,7 @@ elif st.session_state.phase == "challenge":
                     "timestamp": datetime.now().isoformat(),
                     "bias": cd.get("bias_text", ""), "explanation": cd.get("explanation_text", ""),
                     "perspective": perspective, "question": probe_q,
-                    "conversation_message": cd.get("counterattack_message", ""),
+                    "conversation_message": probe_q,  # show probe Q (not counterattack) in replay
                     "followups": [], "answer": partial_answer,
                     "answer_depth": "", "answer_emotion": "", "answer_certainty": "",
                     "answer_key_signal": "", "shifted": False, "still_undecided": False,
