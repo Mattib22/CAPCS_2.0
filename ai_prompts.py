@@ -1262,14 +1262,17 @@ CONTEXT: {context}
 PROFILE:
 {profile_str}
 
-Return ONLY the JSON array. No explanation."""
+IMPORTANT: Output ONLY the raw JSON array below. No preamble, no steps, no reasoning, no explanation before or after it."""
 
     result = ask_ai(prompt, 600)
     try:
         stripped = result.strip()
         if stripped.startswith("```"):
             stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
-        start = stripped.find("[")
+        # Find the first [{  — skips any stray [ from reasoning steps
+        start = stripped.find("[{")
+        if start == -1:
+            start = stripped.find("[")  # fallback for empty array []
         if start == -1:
             return []
         depth, end = 0, -1
