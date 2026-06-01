@@ -1221,11 +1221,14 @@ def get_counterattack_followup(question: str, option_proposed: str,
     prompt = f"""You are CASPER, a psychologist-style thinking partner.
 You proposed this option to the user: {option_proposed}
 
-The user has a question or comment about it:
+The user responded with:
 USER: {question}
 
-Respond in 1-3 sentences. Stay focused on this specific option — do not introduce new options or shift to a different topic.
-Be warm and direct. Help the user think more clearly about whether this option fits their situation.
+If they asked a direct question, answer it concretely and specifically — draw on their profile and the proposed option as context.
+If they pushed back or expressed doubt, engage with it honestly and directly.
+Do not deflect with another question. Do not ask them what they think. Just respond.
+
+Keep it to 2-4 sentences. Warm, direct, specific to their situation.
 
 RECENT CONVERSATION:
 {history_text}
@@ -1234,7 +1237,7 @@ PROFILE:
 {profile_str}
 
 Output only your response."""
-    return ask_ai(prompt, 800) or "What specifically feels uncertain about this option for you?"
+    return ask_ai(prompt, 800) or "The option is about using renting's lower financial commitment to create space for income growth — whether through upskilling, a role change, or building savings over time."
 
 
 def get_partial_probe(option_proposed: str, confirmed_bias: str,

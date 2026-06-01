@@ -1649,7 +1649,7 @@ elif st.session_state.phase == "challenge":
                         enriched_profile_str,
                     )
                 if not _ca_ans or not any(_ca_ans.strip().endswith(p) for p in ".!?"):
-                    _ca_ans = "That's worth exploring. What would a first concrete step toward this option actually look like for you?"
+                    _ca_ans = "The core of this option is about using the current situation to build toward what you actually want — whether that means gaining new skills, saving, or creating more flexibility before committing to a bigger decision."
                 _new_exc = list(_ca_exchanges) + [{"question": _ca_q.strip(), "answer": _ca_ans}]
                 _new_hist = list(cd.get("conversation_history", [])) + [
                     {"role": "user", "content": _ca_q.strip()},
