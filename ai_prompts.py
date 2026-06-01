@@ -783,18 +783,17 @@ def get_spark_message(conversation_history: list, profile_str: str, context: str
 Write the spark message as a hypothesis, not a diagnosis. Use words like "might", "could be", "there's a pattern that might be at play here." Never write "this bias is making you" or "you are experiencing X." The tone should feel like a perceptive friend noticing something, not a clinician delivering a verdict. The bias name appears naturally mid-sentence, not as a label.
 
 Write a spark message of 2-3 sentences (max 60 words) that:
-1. Opens with a tentative observation about the specific thinking pattern visible in the conversation — use hedging language ("there might be", "one pattern that could be at play", "it seems like there's a pull here")
+1. Opens with a concrete observation grounded in something the user specifically said — reference their actual words or situation, not a generic statement. E.g. "The way you described X suggests..." or "When you said Y, there's a pattern underneath that..."
 2. Names '{pre_identified_bias}' naturally mid-sentence as a possibility: "this might be {pre_identified_bias}" or "there's a pattern here that could be {pre_identified_bias}"
-3. Suggests in one sentence what it might be doing to their thinking — use conditional language ("which might be making...", "this could be why...")
+3. Suggests in one sentence what it might be doing to their thinking in this specific situation — use conditional language ("which might be making...", "this could be why...")
 
 Do NOT introduce any option or ask a question.
 Write in second person only.
-Never open with a quote or paraphrase of the user's words.
-Start with your own direct observation — e.g. "That pull toward X is making Y feel like the only option."
+Never open with a generic statement that could apply to anyone — always anchor to what this person actually said.
 
 After the message, output on new lines:
 BIAS_NAME: {pre_identified_bias}
-BIAS_EXPLANATION: [one sentence that explains what this bias looks like in THIS person's specific situation — grounded in what they said, not a generic definition. E.g. not "Loss Aversion: fear of loss outweighs gain" but "For you, this could mean the fear of giving up your current freedom is weighing more heavily than what settling might actually bring."]
+BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
 
 FULL CONVERSATION:
 {history_text}
@@ -841,7 +840,7 @@ Start with your own direct observation — e.g. "That pull toward X is making Y 
 
 IMPORTANT — you MUST include both structured fields on new lines after the message. These are required:
 BIAS_NAME: [bias name only — max 6 words]
-BIAS_EXPLANATION: [one sentence that explains what this bias looks like in THIS person's specific situation — grounded in what they said, not a generic definition. E.g. not "Loss Aversion: fear of loss outweighs gain" but "For you, this could mean the fear of giving up your current freedom is weighing more heavily than what settling might actually bring."]
+BIAS_EXPLANATION: [one plain English sentence defining what this bias is — generic, not personalised]
 
 FULL CONVERSATION:
 {history_text}
@@ -1258,27 +1257,35 @@ PROFILE:
 
 IMPORTANT: Output ONLY the raw JSON array. No preamble, no reasoning, no explanation."""
 
-    result = ask_ai(prompt, 600)
+    result = ask_ai(prompt, 1200)
     try:
         stripped = result.strip()
+        if not stripped:
+            return []
         if stripped.startswith("```"):
             stripped = _re.sub(r"```(?:json)?", "", stripped).strip().rstrip("`").strip()
-        # Find the first [{  — skips any stray [ from reasoning steps
-        start = stripped.find("[{")
-        if start == -1:
-            start = stripped.find("[")  # fallback for empty array []
-        if start == -1:
+        # Find the last [ that starts a complete JSON array — avoids stray
+        # brackets in any reasoning text Gemini may prepend
+        best_start, best_end = -1, -1
+        for m in _re.finditer(r'\[', stripped):
+            s = m.start()
+            depth, end = 0, -1
+            for i, ch in enumerate(stripped[s:], s):
+                if ch == "[": depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1; break
+            if end != -1:
+                try:
+                    candidate = _json.loads(stripped[s:end])
+                    if isinstance(candidate, list) and candidate:
+                        best_start, best_end = s, end  # keep the last valid array
+                except Exception:
+                    pass
+        if best_start == -1:
             return []
-        depth, end = 0, -1
-        for i, ch in enumerate(stripped[start:], start):
-            if ch == "[": depth += 1
-            elif ch == "]":
-                depth -= 1
-                if depth == 0:
-                    end = i + 1; break
-        if end == -1:
-            return []
-        parsed = _json.loads(stripped[start:end])
+        parsed = _json.loads(stripped[best_start:best_end])
         if not isinstance(parsed, list):
             return []
         valid = []
