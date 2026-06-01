@@ -110,6 +110,16 @@ def ask_ai(prompt, max_tokens=1200, json_mode=False):
                        "Bias:","Perspective:","Explanation:","Question:"]:
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()
+        # If response ends mid-sentence (no terminal punctuation), trim back
+        # to the last complete sentence so the user sees something coherent.
+        if text and text[-1] not in ".!?\"'":
+            import re as _re
+            last = max(
+                (m.end() for m in _re.finditer(r'[.!?]["\']?\s', text)),
+                default=0
+            )
+            if last > len(text) // 2:
+                text = text[:last].strip()
         return text
     except Exception as e:
         # Store last error for debugging
