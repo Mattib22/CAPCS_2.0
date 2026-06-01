@@ -1264,6 +1264,7 @@ elif st.session_state.phase == "challenge":
                     candidates = identify_candidate_biases(
                         conv_hist, enriched_profile_str, context
                     )
+                st.session_state["_debug_candidates"] = candidates
                 if candidates:
                     top = candidates[0]
                     second = candidates[1] if len(candidates) > 1 else None
@@ -1381,6 +1382,8 @@ elif st.session_state.phase == "challenge":
                     )
                 st.markdown("---")
 
+            if st.session_state.get("_debug_candidates") is not None:
+                st.caption(f"[debug] raw candidates: {st.session_state['_debug_candidates']}")
             st.markdown("**What CASPER observed**")
             st.markdown(conversation_msg)
             st.markdown("---")

@@ -1224,38 +1224,22 @@ def identify_candidate_biases(conversation_history: list, profile_str: str,
     if not user_turns.strip():
         return []
 
-    prompt = f"""You are a diagnostic psychologist. Read the user's answers and score one bias per dimension.
+    prompt = f"""Score one cognitive bias per dimension based on what the user said.
 
-For each of the three dimensions below, identify the single bias that best fits what the user actually said, and score your confidence in it.
-
-SCORING (absolute confidence — not relative):
-  8-10 = strong, clear evidence in the user's exact words
-  5-7  = moderate evidence — pattern is present but not the main story
-  1-4  = weak or speculative — some signal but not convincing
-
-Rules:
-- You MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision topic alone.
-- If a dimension shows no signal at all, still pick the most plausible bias from it and give it a score of 1-2.
-- Use only bias names exactly as listed in the taxonomy.
-
-BIAS TAXONOMY:
-{_shuffled_dimensions()}
-
-Return EXACTLY 3 entries — one per dimension — as a JSON array:
-[
-  {{"bias": "Best bias from Dimension 1", "dimension": 1, "evidence": "exact phrase from user", "score": 7}},
-  {{"bias": "Best bias from Dimension 2", "dimension": 2, "evidence": "exact phrase from user", "score": 4}},
-  {{"bias": "Best bias from Dimension 3", "dimension": 3, "evidence": "exact phrase from user", "score": 9}}
-]
-
-USER'S ANSWERS:
+USER ANSWERS:
 {user_turns}
 
 CONTEXT: {context}
-PROFILE:
-{profile_str}
 
-IMPORTANT: Output ONLY the raw JSON array. No preamble, no reasoning, no explanation."""
+Dimension 1 (Wants & Values): Sunk Cost Fallacy, Idealization Bias, Projection Bias, Overconfidence Bias, Halo Effect
+Dimension 2 (Fears & Protection): Anticipated Regret, Loss Aversion, Status Quo Bias, Omission Bias
+Dimension 3 (Assumptions): False Dichotomy, Overgeneralization, Constraint Fixation, Availability Heuristic, Confirmation Bias, Anchoring Bias, Social Proof Bias
+
+For each dimension pick the best-fitting bias, quote the user's exact words as evidence, and score confidence 1-10 (10=very strong evidence, 1=weak).
+If a dimension shows no signal, still pick the most plausible bias and score it 1-2.
+
+Output ONLY this JSON array, nothing else:
+[{{"bias":"<name>","dimension":1,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":2,"evidence":"<quote>","score":<n>}},{{"bias":"<name>","dimension":3,"evidence":"<quote>","score":<n>}}]"""
 
     result = ask_ai(prompt, 1200)
     try:
