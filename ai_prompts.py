@@ -1236,13 +1236,21 @@ SELECTION PROCESS — follow these steps in order:
 
 For each bias you include, you MUST cite the exact phrase or idea from the user's own words as evidence. Do NOT infer from the decision type alone.
 
-Return ONLY a JSON array with at most 3 entries, highest confidence first:
+Return ONLY a JSON array with the top 3 most plausible biases, highest confidence first:
 [
   {{"bias": "Exact Bias Name From Taxonomy", "evidence": "specific phrase from user", "score": 8}},
-  {{"bias": "Second Bias Name", "evidence": "what specifically points to it", "score": 5}}
+  {{"bias": "Second Bias Name", "evidence": "what specifically points to it", "score": 5}},
+  {{"bias": "Third Bias Name", "evidence": "what weakly points to it", "score": 3}}
 ]
 
-score = 1-10. Only include biases with score >= 4. If only one fits well, return just that one. If nothing clearly fits, return [].
+score = 1-10 (absolute confidence, not relative ranking):
+  8-10 = strong clear evidence in the user's exact words
+  5-7  = moderate evidence — pattern is present but not dominant
+  3-4  = weak but plausible — some signal, worth showing as an alternative
+
+Always return the top 3 biases that have any evidence, even if their score is low.
+Only return fewer than 3 if genuinely fewer than 3 biases have any evidence at all.
+If nothing fits at all, return [].
 
 BIAS TAXONOMY — only use names exactly as listed:
 {_shuffled_dimensions()}
@@ -1280,7 +1288,7 @@ Return ONLY the JSON array. No explanation."""
         for item in parsed:
             if isinstance(item, dict) and "bias" in item:
                 score = int(item.get("score", 0))
-                if score >= 4 and item["bias"].strip():
+                if score >= 3 and item["bias"].strip():
                     valid.append({
                         "bias": item["bias"].strip(),
                         "evidence": item.get("evidence", "").strip(),

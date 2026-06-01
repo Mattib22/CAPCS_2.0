@@ -1355,15 +1355,16 @@ elif st.session_state.phase == "challenge":
             # Fall back to a single synthetic entry if diagnostic had no scored candidates
             _candidates = cd.get("bias_candidates", [])
             if not _candidates and bias_name_short:
-                _candidates = [{"bias": bias_name_short, "score": 1, "evidence": ""}]
+                _candidates = [{"bias": bias_name_short, "score": 5, "evidence": ""}]
             if _candidates:
-                _total = sum(c.get("score", 0) for c in _candidates)
                 _top_name = _candidates[0].get("bias", bias_name_short)
                 st.markdown(f"The most likely pattern is **{_top_name}**")
                 st.markdown("")
                 for _c in _candidates:
-                    _pct = int(round(100 * _c.get("score", 0) / _total)) if _total else 0
-                    _pct = max(0, min(100, _pct))
+                    # Absolute confidence: score is 1-10, multiply by 10 for %
+                    # This shows each bias's own confidence independently,
+                    # rather than normalising to 100 % across candidates.
+                    _pct = max(0, min(100, int(_c.get("score", 0)) * 10))
                     _name = _c.get("bias", "")
                     _is_top = _name.split("—")[0].strip() == bias_name_short
                     _filled = min(10, _pct // 10)
