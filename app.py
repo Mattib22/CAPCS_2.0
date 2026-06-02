@@ -736,13 +736,14 @@ elif st.session_state.phase == "onboarding":
                         "version": PROFILE_VERSION,
                         "completed_at": datetime.now().isoformat()
                     }
-                    save_profile(profile_to_save)
-                    # Cache in session state so input phase doesn't need Supabase immediately
-                    st.session_state.cached_profile = profile_to_save
-                    # Clear the force flag so the guard works again next time
-                    st.session_state.force_profile_update = False
-                    st.session_state.phase = "input"
-                    st.rerun()
+                    saved = save_profile(profile_to_save)
+                    if saved:
+                        # Cache in session state so input phase doesn't need Supabase immediately
+                        st.session_state.cached_profile = profile_to_save
+                        st.session_state.force_profile_update = False
+                        st.session_state.phase = "input"
+                        st.rerun()
+                    # If save failed, save_profile() already showed an error — stay on this page
 
 # ════════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — DECISION INPUT
@@ -2083,7 +2084,8 @@ elif st.session_state.phase == "report":
             r.get("perspective","")
             for r in rounds_log_s if r.get("perspective") and r.get("round_state") == "counterattack"
         ))
-        what_shifted = next(
+        # Prefer the directly-saved field; fall back to conviction round for in-session use
+        what_shifted = last.get("what_shifted", "") or next(
             (r.get("answer","") for r in rounds_log_s
              if r.get("round_state") == "conviction"
              and r.get("answer","") and not r.get("answer","").startswith("[")),

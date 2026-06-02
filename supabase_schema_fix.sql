@@ -25,6 +25,12 @@ CREATE INDEX rounds_user_key_idx  ON rounds (user_key);
 CREATE INDEX rounds_session_id_idx ON rounds (session_id);
 
 -- ============================================================
+-- Schema fix: sessions — add what_shifted column
+-- ============================================================
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS what_shifted text;
+
+-- ============================================================
 -- Schema fix: profile_history — add saved_at if missing
 -- ============================================================
 

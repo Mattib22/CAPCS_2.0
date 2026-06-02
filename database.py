@@ -46,10 +46,11 @@ def load_profile() -> dict:
         return st.session_state.cached_profile
     return load_profile_for_user(st.session_state.get("user_key", ""))
 
-def save_profile(profile_data: dict):
+def save_profile(profile_data: dict) -> bool:
     user_key = st.session_state.get("user_key", "")
-    if not user_key:
-        return
+    if not user_key or user_key == "anonymous":
+        st.error("⚠️ Could not save your profile — no valid account found. Please log in again.")
+        return False
     try:
         sb = get_supabase()
         completed_at = profile_data.get("completed_at", datetime.now().isoformat())
@@ -70,14 +71,15 @@ def save_profile(profile_data: dict):
             "version": profile_data.get("version", PROFILE_VERSION),
             "completed_at": completed_at,
         }
-        # Upsert current profile
-        res = sb.table("profiles").upsert(row, on_conflict="user_key").execute()
-        # Log to profile_history — every save creates a new row so changes are tracked
-        history_row = {**row, "saved_at": datetime.now().isoformat()}
-        sb.table("profile_history").insert(history_row).execute()
-        return res
+        sb.table("profiles").upsert(row, on_conflict="user_key").execute()
+        try:
+            sb.table("profile_history").insert({**row, "saved_at": datetime.now().isoformat()}).execute()
+        except Exception:
+            pass  # profile_history failure is non-critical
+        return True
     except Exception as e:
-        st.warning(f"⚠️ Profile save issue: {e}")
+        st.error(f"⚠️ Could not save your profile: {e}. Please check your connection and try again.")
+        return False
 
 def get_or_create_user_key() -> tuple:
     """
@@ -238,7 +240,10 @@ def _product_rounds_to_rounds_log(rows: list) -> list:
 
 
 def save_log(entry: dict):
-    user_key = st.session_state.get("user_key", "anonymous")
+    user_key = st.session_state.get("user_key", "")
+    if not user_key or user_key == "anonymous":
+        st.error("⚠️ Could not save your session — no valid account found. Please log in again.")
+        return
     try:
         sb = get_supabase()
         session_duration = None
@@ -248,6 +253,14 @@ def save_log(entry: dict):
             session_duration = int((end - start).total_seconds())
         except Exception:
             pass
+
+        # Extract what_shifted from conviction round (skipped in product rounds)
+        what_shifted = next(
+            (r.get("answer", "") for r in entry.get("rounds_log", [])
+             if r.get("round_state") == "conviction"
+             and r.get("answer", "") and not r.get("answer", "").startswith("[")),
+            ""
+        )
 
         session_row = {
             "user_key": user_key,
@@ -264,8 +277,8 @@ def save_log(entry: dict):
             "confidence_trajectory": entry.get("confidence_trajectory", []),
             "confidence_threshold": entry.get("confidence_threshold"),
             "final_choice": entry.get("final_choice"),
+            "what_shifted": what_shifted,
             "rounds_completed": entry.get("rounds_completed"),
-            "round_durations_seconds": entry.get("round_durations_seconds", []),
             "session_duration_seconds": session_duration,
             "conversation_history": entry.get("conversation_history", []),
             "undecided_outcome": entry.get("undecided_outcome", False),
@@ -306,7 +319,9 @@ def load_log() -> list:
     Load session history from Supabase. Cached per Streamlit run to avoid
     multiple round-trips per page render.
     """
-    user_key = st.session_state.get("user_key", "anonymous")
+    user_key = st.session_state.get("user_key", "")
+    if not user_key or user_key == "anonymous":
+        return []
     cache_key = f"_load_log_cache_{user_key}"
     if cache_key in st.session_state and st.session_state.get("_load_log_dirty") is not True:
         return st.session_state[cache_key]
