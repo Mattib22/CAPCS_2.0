@@ -173,6 +173,15 @@ with st.sidebar:
             st.session_state.previous_phase = st.session_state.get("phase", "input")
             navigate_to("reasoning_profile")
     st.divider()
+    if st.button("🔄 Switch account", key="sidebar_switch_account", use_container_width=True):
+        # Log out without deleting data — clears session state, URL, and localStorage
+        for k, v in defaults.items():
+            st.session_state[k] = v
+        st.session_state["user_key"] = ""
+        st.session_state["cached_profile"] = {}
+        st.query_params.clear()
+        st.session_state["_skip_ls_restore"] = True
+        st.rerun()
     if st.button("🗑 Clear my data", key="sidebar_clear_data", use_container_width=True):
         user_key = st.session_state.get("user_key", "anonymous")
         delete_log(user_key)
@@ -366,9 +375,13 @@ if not st.session_state.get("user_key"):
                             "user_key": new_key,
                             "display_name": display_name,
                         }, on_conflict="user_key").execute()
+                        # Clear any previous user's session before setting new identity
+                        for _k, _v in defaults.items():
+                            st.session_state[_k] = _v
                         st.session_state.user_key = new_key
                         st.session_state.display_name = display_name
                         st.session_state.phase = "consent"
+                        st.query_params.clear()
                         st.query_params["uk"] = new_key
                         st.markdown(
                             f"<script>localStorage.setItem('capcs_user_key', '{new_key}');</script>",
