@@ -283,7 +283,12 @@ def save_log(entry: dict):
             "conversation_history": entry.get("conversation_history", []),
             "undecided_outcome": entry.get("undecided_outcome", False),
         }
-        session_res = sb.table("sessions").insert(session_row).execute()
+        try:
+            session_res = sb.table("sessions").insert(session_row).execute()
+        except Exception:
+            # Retry without what_shifted in case the column doesn't exist yet
+            session_row.pop("what_shifted", None)
+            session_res = sb.table("sessions").insert(session_row).execute()
         session_id = session_res.data[0]["id"] if session_res.data else None
         entry["id"] = session_id
 
